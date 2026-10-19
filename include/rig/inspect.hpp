@@ -17,6 +17,69 @@
 namespace rig {
 namespace detail {
 
+consteval bool has_route(std::meta::info member) {
+    return std::meta::is_function(member) &&
+        !std::meta::annotations_of_with_type(member, ^^rig::route).empty();
+}
+
+consteval bool contains_type(const std::vector<std::meta::info>& types,
+                             std::meta::info type) {
+    for (auto existing : types) {
+        if (std::meta::is_same_type(existing, type)) return true;
+    }
+    return false;
+}
+
+consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& types) {
+    type = std::meta::remove_cvref(type);
+    if (std::meta::is_same_type(type, ^^int) ||
+        std::meta::is_same_type(type, ^^bool) ||
+        std::meta::is_same_type(type, ^^std::string)) return;
+
+    if (std::meta::has_template_arguments(type)) {
+        const auto templ = std::meta::template_of(type);
+        if (templ == ^^std::vector || templ == ^^std::optional) {
+            collect_type(std::meta::template_arguments_of(type)[0], types);
+            return;
+        }
+    }
+
+    if (!std::meta::is_enum_type(type) && !std::meta::is_class_type(type)) return;
+    if (contains_type(types, type)) return;
+    types.push_back(type);
+    if (std::meta::is_class_type(type)) {
+        for (auto field : std::meta::nonstatic_data_members_of(
+                 type, std::meta::access_context::unprivileged())) {
+            collect_type(std::meta::type_of(field), types);
+        }
+    }
+}
+
+consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
+    std::vector<std::meta::info> types;
+    for (auto member : std::meta::members_of(
+             scope, std::meta::access_context::unprivileged())) {
+        if (!has_route(member)) continue;
+        collect_type(std::meta::return_type_of(member), types);
+        for (auto parameter : std::meta::parameters_of(member)) {
+            collect_type(std::meta::type_of(parameter), types);
+        }
+    }
+    // Keep direct namespace types in source order so adding a route does not
+    // reorder unrelated schemas. Append any nested or external types after.
+    std::vector<std::meta::info> ordered;
+    for (auto member : std::meta::members_of(
+             scope, std::meta::access_context::unprivileged())) {
+        if (std::meta::is_type(member) && contains_type(types, member)) {
+            ordered.push_back(member);
+        }
+    }
+    for (auto type : types) {
+        if (!contains_type(ordered, type)) ordered.push_back(type);
+    }
+    return ordered;
+}
+
 inline void quoted(std::ostream& output, std::string_view value) {
     output << '"';
     for (unsigned char ch : value) {
@@ -157,6 +220,19 @@ public:
         } else {
             static_assert(std::meta::is_enum_type(Type) || std::meta::is_class_type(Type),
                           "RIG supports only registered records and enums");
+        }
+    }
+
+    template <std::meta::info Scope>
+    void add_namespace() {
+        static_assert(std::meta::is_namespace(Scope), "RIG expects a namespace root");
+        template for (constexpr auto type : std::define_static_array(
+            detail::reachable_types(Scope))) {
+            add_type<type>();
+        }
+        template for (constexpr auto member : std::define_static_array(
+            std::meta::members_of(Scope, std::meta::access_context::unprivileged()))) {
+            if constexpr (detail::has_route(member)) add_operation<member>();
         }
     }
 

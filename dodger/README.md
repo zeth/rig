@@ -22,6 +22,8 @@ Something instead of the same boring examples.
 `api.hpp` is the C++20 API declaration used by RIG's reflection prototype.
 `openapi.json` is generated from it. `game.cpp` implements a small deterministic
 simulation, and `server.cpp` serves the declared routes on localhost.
+`inspect.cpp` nominates the `dodger` namespace; RIG discovers the annotated
+operations and their reachable types without a separate declaration list.
 
 The sample contract now has left/stay/right actions, player lives and shove
 cooldowns, falling obstacles, and a waiting/running/finished game status. A

@@ -108,10 +108,12 @@ rules, and generated-file drift. GCC 16 with `-freflection` and Python 3 are
 required for generation. Ordinary consumers compile their API headers as
 C++20 without reflection.
 
-`include/rig/inspect.hpp` is the reusable C++26 reflection writer. Each app
-provides a small registration file: `dodger/inspect.cpp` or
-`examples/catalog/inspect.cpp`. The writer extracts route annotations,
-parameters, return types, record fields, and enum values into RIG IR JSON.
+`include/rig/inspect.hpp` is the reusable C++26 reflection writer. Dodger's
+`dodger/inspect.cpp` nominates its namespace once; RIG discovers its
+`RIG_ROUTE` functions and the record and enum types reachable from their
+signatures. `examples/catalog/inspect.cpp` still demonstrates explicit
+registration. The writer extracts route annotations, parameters, return
+types, record fields, and enum values into RIG IR JSON.
 `tools/openapi.py` converts that IR to OpenAPI 3.1 JSON with Python's standard
 library. The catalog example has no dependency on Dodger and exercises the
 same pipeline with a different API. This split remains an experiment; the
@@ -130,8 +132,8 @@ Type names currently use their unqualified C++ identifier, so registering two
 types with the same short name is rejected by the OpenAPI converter.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
-selected functions with `RIG_ROUTE`, and create a C++26 registration file using
-`rig::writer`:
+selected functions with `RIG_ROUTE`, and nominate the containing namespace in
+a C++26 entry point:
 
 ```cpp
 #include <examples/catalog/api.hpp>
@@ -139,17 +141,17 @@ selected functions with `RIG_ROUTE`, and create a C++26 registration file using
 #include <iostream>
 
 rig::writer output(std::cout);
-output.add_type<^^catalog::Availability>();
-output.add_type<^^catalog::Item>();
-output.add_operation<^^catalog::get_item>();
+output.add_namespace<^^catalog>();
 output.finish();
 ```
 
 Compile that registration file with `-std=c++26 -freflection -DRIG_GENERATING`
 and the RIG include directory, then pipe its JSON output to
-`python3 tools/openapi.py --title 'Catalog API'`. Register every referenced
-record and enum before the operations; unsupported references fail during
-OpenAPI conversion.
+`python3 tools/openapi.py --title 'Catalog API'`. Namespace discovery sees
+directly declared functions with a route annotation and follows their
+referenced record and enum types. Unsupported references fail during OpenAPI
+conversion. `rig::writer` also retains explicit `add_type` and
+`add_operation` calls for cases where a namespace root is unsuitable.
 
 Dodger now supplies a C++20 game engine and a localhost HTTP server for the
 generated routes. The server uses `nlohmann_json` for JSON and POSIX sockets;
