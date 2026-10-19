@@ -18,3 +18,12 @@ That's probably the absolute minimum viable **arcade game**: player movement + f
 Things fall. Don't get hit.
 
 Something instead of the same boring examples.
+
+For now, `api.hpp` is a sample C++20 API declaration used by RIG's reflection
+prototype. `openapi.json` is generated from it. The game and its HTTP server
+have not been implemented yet.
+
+The sample contract now has left/stay/right actions, player lives and shove
+cooldowns, falling obstacles, and a waiting/running/finished game status. A
+winner is `null` until the game ends. These are intended wire shapes; the
+simulation rules and response behaviour still need to be implemented.

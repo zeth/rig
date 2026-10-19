@@ -1,0 +1,211 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Dodger API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/games/{id}": {
+      "get": {
+        "operationId": "get_game",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameState"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      }
+    },
+    "/games/{id}/players/2/actions": {
+      "post": {
+        "operationId": "submit_action",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameState"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Action"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Move": {
+        "type": "string",
+        "enum": [
+          "Left",
+          "Stay",
+          "Right"
+        ]
+      },
+      "GameStatus": {
+        "type": "string",
+        "enum": [
+          "Waiting",
+          "Running",
+          "Finished"
+        ]
+      },
+      "Winner": {
+        "type": "string",
+        "enum": [
+          "Human",
+          "Bot",
+          "Draw"
+        ]
+      },
+      "Player": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "lives": {
+            "type": "integer"
+          },
+          "shove_cooldown_ticks": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "lives",
+          "shove_cooldown_ticks"
+        ],
+        "additionalProperties": false
+      },
+      "Obstacle": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "width": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width"
+        ],
+        "additionalProperties": false
+      },
+      "Action": {
+        "type": "object",
+        "properties": {
+          "move": {
+            "$ref": "#/components/schemas/Move"
+          },
+          "shove": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "move",
+          "shove"
+        ],
+        "additionalProperties": false
+      },
+      "GameState": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "tick": {
+            "type": "integer"
+          },
+          "arena_width": {
+            "type": "integer"
+          },
+          "arena_height": {
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GameStatus"
+          },
+          "human": {
+            "$ref": "#/components/schemas/Player"
+          },
+          "bot": {
+            "$ref": "#/components/schemas/Player"
+          },
+          "obstacles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Obstacle"
+            }
+          },
+          "winner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Winner"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "tick",
+          "arena_width",
+          "arena_height",
+          "status",
+          "human",
+          "bot",
+          "obstacles",
+          "winner"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

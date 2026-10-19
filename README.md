@@ -97,3 +97,30 @@ These annotations are illustrative of RIG's proposed interface.
 Developers continue writing ordinary C++20. RIG uses C++26 reflection at generation time to discover the annotated operations, extract their types and semantics, and produce an OpenAPI specification.
 
 **The compiler understands the C++. RIG understands the interfaces. Existing tools consume the output.**
+
+### Current prototype
+
+The repository now contains a deliberately narrow working slice. From this directory,
+run `make generate` to compile the C++26 inspector and regenerate
+`dodger/openapi.json`; run `make check` to verify the C++20 header, conversion
+rules, and generated-file drift. GCC 16 with `-freflection` and Python 3 are
+required for generation. Ordinary consumers can compile `dodger/api.hpp` as
+C++20 without reflection.
+
+The inspector reads the explicitly registered declarations in
+`src/inspect.cpp`, extracts route annotations, parameters, return types, and
+record fields, then emits `build/rig.json`. `tools/openapi.py` converts that IR
+to OpenAPI 3.1 JSON with Python's standard library. This split is an experiment:
+the example is too small to determine whether the final OpenAPI generator
+should stay in Python or move into C++.
+
+Current conventions are intentionally small: a parameter named in the route
+is a path parameter; one remaining parameter becomes a JSON request body;
+registered record fields are required; and a successful operation returns
+HTTP 200 with a JSON body. The IR currently describes `int`, `bool`,
+`std::string`, registered records and enums, `std::vector<T>`, and
+`std::optional<T>`. Enums become JSON strings matching their C++ enumerator
+names. An optional field is always present and contains either a value or
+`null`. Unsupported types and ambiguous inputs fail loudly.
+The prototype generates a contract only. Dodger has no game engine or HTTP
+server yet, and this contract does not describe a running service.
