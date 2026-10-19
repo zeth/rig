@@ -148,5 +148,7 @@ int main() {
     emit_operation<^^dodger::get_game>();
     std::cout << ',';
     emit_operation<^^dodger::submit_action>();
+    std::cout << ',';
+    emit_operation<^^dodger::submit_human_action>();
     std::cout << "]}\n";
 }

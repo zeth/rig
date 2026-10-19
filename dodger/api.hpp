@@ -45,4 +45,7 @@ GameState get_game(int id);
 RIG_ROUTE(POST, "/games/{id}/players/2/actions")
 GameState submit_action(int id, Action action);
 
+RIG_ROUTE(POST, "/games/{id}/players/1/actions")
+GameState submit_human_action(int id, Action action);
+
 }

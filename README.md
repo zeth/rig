@@ -122,5 +122,13 @@ HTTP 200 with a JSON body. The IR currently describes `int`, `bool`,
 `std::optional<T>`. Enums become JSON strings matching their C++ enumerator
 names. An optional field is always present and contains either a value or
 `null`. Unsupported types and ambiguous inputs fail loudly.
-The prototype generates a contract only. Dodger has no game engine or HTTP
-server yet, and this contract does not describe a running service.
+Dodger now supplies a C++20 game engine and a localhost HTTP server for the
+generated routes. The server uses `nlohmann_json` for JSON and POSIX sockets;
+on Fedora, install `json-devel` if its header is unavailable. Run
+`make server` to listen on `127.0.0.1:8765`. `make check` also exercises the
+server over HTTP and checks its success responses against the generated
+schemas.
+
+The HTTP server's JSON encoding is still written by hand. This is a concrete
+integration boundary to investigate before claiming RIG can keep a server's
+wire representation in sync with its generated OpenAPI contract.
