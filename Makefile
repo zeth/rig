@@ -1,7 +1,7 @@
 CXX ?= g++
 PYTHON ?= python3
 
-.PHONY: generate check server clean
+.PHONY: generate check server play clean
 
 build/inspect: src/inspect.cpp dodger/api.hpp include/rig/route.hpp
 	mkdir -p build
@@ -24,6 +24,9 @@ generate: build/openapi.json
 
 server: build/dodger-server
 	./build/dodger-server
+
+play: build/dodger-server
+	$(PYTHON) dodger/play.py
 
 check: build/openapi.json build/dodger-server build/game-test
 	$(CXX) -std=c++20 -Iinclude -I. -fsyntax-only src/cxx20_check.cpp

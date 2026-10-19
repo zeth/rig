@@ -129,6 +129,11 @@ on Fedora, install `json-devel` if its header is unavailable. Run
 server over HTTP and checks its success responses against the generated
 schemas.
 
+Run `make play` in a terminal to launch the server, a Python bot that uses
+the HTTP routes, and a terminal client for the human player. The bot and
+client use only Python's standard library. See `dodger/README.md` for
+controls and standalone commands.
+
 The HTTP server's JSON encoding is still written by hand. This is a concrete
 integration boundary to investigate before claiming RIG can keep a server's
 wire representation in sync with its generated OpenAPI contract.

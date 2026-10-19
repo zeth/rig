@@ -40,6 +40,17 @@ curl -X POST http://127.0.0.1:8765/games/1/players/2/actions \
   -H 'Content-Type: application/json' -d '{"move":"Left","shove":false}'
 ```
 
-The demo hosts one game (`id` 1) and has no graphical or terminal player UI
-yet. The HTTP listener is intentionally limited to localhost and basic JSON
-requests. A Python bot and a local human UI are natural next steps.
+For a playable match, run `make play` in a terminal. It starts the server, a
+Python bot using the HTTP API, and a terminal client for the human player.
+Use A/D or the arrow keys to move, Space to shove, and Q to quit. Hold a
+movement key to keep moving; the most recent key is applied for one client
+update (about three simulation ticks). Restart `make play` for a new game.
+
+The bot uses only Python's standard library. Every tenth of a second, it
+reads the game state, compares left/stay/right against the next few obstacle
+positions, and sends its action over HTTP. It sees the same state and has the
+same movement and shove rules as the human client. `python3 dodger/bot.py`
+can also connect to a separately running `make server` instance.
+
+The demo hosts one game (`id` 1). The HTTP listener is intentionally limited
+to localhost and basic JSON requests.

@@ -102,6 +102,12 @@ def main():
             validate(action, operation["requestBody"]["content"]["application/json"]["schema"], components)
             validate(state, operation["responses"]["200"]["content"]["application/json"]["schema"], components)
         assert state["status"] == "Running"
+        bot_script = Path(__file__).resolve().parents[1] / "dodger" / "bot.py"
+        subprocess.run(
+            [sys.executable, str(bot_script), "--url", base,
+             "--interval", "0.02", "--max-actions", "5"],
+            check=True, timeout=5,
+        )
         time.sleep(0.2)
         status, state = request(base + "/games/1")
         assert status == 200 and state["tick"] > 0
