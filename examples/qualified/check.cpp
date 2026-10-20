@@ -7,6 +7,11 @@
 left::Result left::read() { return {7}; }
 left::Result left::by_key(std::string key) { return {static_cast<int>(key.size())}; }
 left::Result left::newest() { return {99}; }
+left::Result left::limited(int limit) { return {limit}; }
+left::Result left::query(std::string text, bool enabled) {
+    const int value = text == "a b" ? 1 : text == "a&b" ? 2 : 0;
+    return {enabled ? value : -value};
+}
 right::Result right::read() { return {"seven"}; }
 service::Pair service::echo(Pair pair) { return pair; }
 rig::result<service::Pair, rig::error<422, left::Result>, rig::error<503, right::Result>>
@@ -26,6 +31,16 @@ int main() {
     const auto encoded_slash = rig_http::dispatch("GET", "/left/a%2Fb", "");
     const auto invalid_escape = rig_http::dispatch("GET", "/left/a%2", "");
     const auto invalid_hex = rig_http::dispatch("GET", "/left/a%GG", "");
+    const auto limited = rig_http::dispatch("GET", "/left/limited?limit=12", "");
+    const auto missing_limit = rig_http::dispatch("GET", "/left/limited", "");
+    const auto invalid_limit = rig_http::dispatch("GET", "/left/limited?limit=no", "");
+    const auto oversized_limit = rig_http::dispatch("GET", "/left/limited?limit=999999999999", "");
+    const auto duplicate_limit = rig_http::dispatch("GET", "/left/limited?limit=1&limit=2", "");
+    const auto escaped_limit = rig_http::dispatch("GET", "/left/limited?li%6dit=10", "");
+    const auto malformed_query = rig_http::dispatch("GET", "/left/limited?limit=%XX", "");
+    const auto query_text = rig_http::dispatch("GET", "/left/query?text=a+b&enabled=true", "");
+    const auto query_false = rig_http::dispatch("GET", "/left/query?text=a%26b&enabled=false", "");
+    const auto invalid_bool = rig_http::dispatch("GET", "/left/query?text=a&enabled=yes", "");
     const auto right = rig_http::dispatch("GET", "/right", "");
     const auto pair = rig_http::dispatch(
         "POST", "/pairs", R"({"left":{"value":7},"right":{"value":"seven"}})");
@@ -49,6 +64,17 @@ int main() {
            invalid_escape->body["code"] == "invalid_request");
     assert(invalid_hex && invalid_hex->status == 400 &&
            invalid_hex->body["code"] == "invalid_request");
+    assert(limited && limited->status == 200 && limited->body["value"] == 12);
+    assert(escaped_limit && escaped_limit->status == 200 && escaped_limit->body["value"] == 10);
+    for (const auto& response : {missing_limit, invalid_limit, oversized_limit,
+                                 duplicate_limit, malformed_query}) {
+        assert(response && response->status == 400 &&
+               response->body["code"] == "invalid_request");
+    }
+    assert(query_text && query_text->status == 200 && query_text->body["value"] == 1);
+    assert(query_false && query_false->status == 200 && query_false->body["value"] == -2);
+    assert(invalid_bool && invalid_bool->status == 400 &&
+           invalid_bool->body["code"] == "invalid_request");
     assert(right && right->status == 200 && right->body["value"] == "seven");
     assert(pair && pair->status == 200 && pair->body["left"]["value"] == 7 &&
            pair->body["right"]["value"] == "seven");

@@ -1,4 +1,4 @@
-# RIG IR version 3
+# RIG IR version 4
 
 RIG's C++26 inspector writes one JSON object to standard output. The `rig`
 generators read that object from standard input. `rig validate < rig.json`
@@ -13,7 +13,7 @@ the order of the requested namespaces.
 
 ```json
 {
-  "ir_version": 3,
+  "ir_version": 4,
   "types": [
     {"kind": "record", "name": "Item", "cpp_name": "app::Item", "fields": [
       {"name": "id", "type": {"kind": "builtin", "name": "int"}}
@@ -71,9 +71,12 @@ through 599. Each method and path pair and each operation `cpp_name` is unique.
 Paths start with `/` and contain literal segments or whole-segment `{name}`
 placeholders. Literals use ASCII letters, digits, `.`, `_`, `~`, and `-`.
 A placeholder must name exactly one parameter of type `int` or `string`.
-Other parameters form the JSON request body; at most one is allowed. `GET`
-and `DELETE` cannot have a body under the current convention. These rules
-are shared by OpenAPI and the C++20 HTTP dispatch generator.
+Parameters annotated `RIG_QUERY` after their C++ name have `"in": "query"`
+in IR. Required query parameters support scalar `int`, `bool`, and
+`std::string` values. Other parameters form the JSON request body; at most one
+is allowed. For example, `list_items(int limit RIG_QUERY)` takes `limit` from
+`?limit=10`. `GET` and `DELETE` cannot have a body under the current convention.
+These rules are shared by OpenAPI and the C++20 HTTP dispatch generator.
 For the same method, literal segments take precedence over placeholders, and
 integer placeholders take precedence over string placeholders. Parameterized
 paths with the same shape, such as `/items/{id}` and `/items/{slug}`, are
@@ -85,9 +88,9 @@ dispatch uses the same precedence independently of declaration order.
 Record fields are all present in JSON. An `optional` field is present with
 either a value or `null`; it does not mean the field can be omitted. Successful
 operations have a JSON response with HTTP 200. Unknown keys and unsupported
-types are rejected so that every generator interprets version 3 the same way.
-Version 2 IR is rejected; regenerate it with `rig inspect` before running the
-version 3 generators. `json-codec` and `http-routes` now use `cpp_name` and no
+types are rejected so that every generator interprets version 4 the same way.
+Older IR is rejected; regenerate it with `rig inspect` before running the
+version 4 generators. `json-codec` and `http-routes` use `cpp_name` and no
 longer take `--namespace`.
 
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
@@ -98,9 +101,12 @@ Generated dispatch matches the path without its query string. It decodes
 percent escapes in string path parameters after matching path segments, so an
 encoded slash stays within its parameter. A plus sign remains a plus sign.
 Malformed percent escapes in a matched string parameter return HTTP 400.
+For declared query parameters, dispatch decodes percent escapes and maps `+`
+to space. Missing, duplicate, or invalid query values return HTTP 400. Extra
+query parameters are ignored when their names are unique.
 
-When a route converts an integer or string path parameter or decodes a JSON
-body, RIG also declares an HTTP 400 response for invalid input. Its body has
+When a route converts a path or query parameter or decodes a JSON body, RIG
+also declares an HTTP 400 response for invalid input. Its body has
 `code` set to `invalid_request` and a string `message`. If the operation
 declares its own 400 error, OpenAPI uses `anyOf` for both bodies. The generated
 HTTP dispatcher returns this input error before invoking the application

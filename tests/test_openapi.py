@@ -6,7 +6,7 @@ from rig.openapi import convert
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 3,
+            "ir_version": 4,
             "types": [{
                 "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
@@ -49,6 +49,19 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(response["content"]["application/json"]["schema"], {
             "$ref": "#/components/schemas/RigInvalidRequest",
         })
+
+    def test_query_parameter_is_required_and_advertises_invalid_request(self):
+        self.ir["operations"][0]["path"] = "/results"
+        self.ir["operations"][0]["parameters"] = [
+            {"name": "limit", "type": {"kind": "builtin", "name": "int"}, "in": "query"}
+        ]
+        operation = convert(self.ir)["paths"]["/results"]["get"]
+        self.assertEqual(operation["parameters"], [{
+            "name": "limit", "in": "query", "required": True,
+            "schema": {"type": "integer"},
+        }])
+        self.assertIn("400", operation["responses"])
+        self.assertNotIn("requestBody", operation)
 
     def test_declared_400_and_generated_invalid_request_share_response(self):
         self.ir["operations"][0]["errors"] = [{

@@ -25,7 +25,7 @@ RIG_ROUTE(GET, "/items/{id}")
 Item get_item(int id);
 
 RIG_ROUTE(GET, "/items")
-ItemList list_items();
+ItemList list_items(int limit RIG_QUERY);
 
 RIG_ROUTE(POST, "/items")
 Item create_item(Item item);

@@ -10,7 +10,7 @@ from rig.openapi import convert
 
 
 VALID = {
-    "ir_version": 3,
+    "ir_version": 4,
     "types": [
         {"kind": "record", "name": "Item", "cpp_name": "sample::Item", "fields": [
             {"name": "id", "type": {"kind": "builtin", "name": "int"}},
@@ -39,7 +39,7 @@ class IRValidationTests(unittest.TestCase):
         cases = [
             (lambda ir: ir.pop("types"), "missing types"),
             (lambda ir: ir.update(ir_version=True), "unsupported RIG IR version"),
-            (lambda ir: ir.update(ir_version=2), "unsupported RIG IR version"),
+            (lambda ir: ir.update(ir_version=3), "unsupported RIG IR version"),
             (lambda ir: ir["types"].append(copy.deepcopy(ir["types"][0])), "duplicate type name"),
             (lambda ir: ir["types"][0].update(cpp_name="sample::Other"), "does not match cpp_name"),
             (lambda ir: ir["types"][0].update(cpp_name="sample::bad-name"), "invalid qualified C\\+\\+ name"),
@@ -52,6 +52,9 @@ class IRValidationTests(unittest.TestCase):
             (lambda ir: ir["operations"][0].update(path="/items/{id}/{id}"), "duplicate route parameter"),
             (lambda ir: ir["operations"][0].update(path="/items/{id}/"), "unsupported route path"),
             (lambda ir: ir["operations"][0]["parameters"].append({"name": "body", "type": {"kind": "named", "name": "sample::Item"}}), "body with GET"),
+            (lambda ir: ir["operations"][0]["parameters"][0].update({"in": "query"}), "query parameter is also a path placeholder"),
+            (lambda ir: ir["operations"][0]["parameters"][0].update({"in": "header"}), "unsupported parameter location"),
+            (lambda ir: ir["operations"][0].update(path="/items"), "body with GET"),
             (lambda ir: ir["operations"][0]["errors"].append(copy.deepcopy(ir["operations"][0]["errors"][0])), "duplicate response status"),
             (lambda ir: ir["operations"].append(copy.deepcopy(ir["operations"][0])), "duplicate operation name"),
         ]
@@ -73,6 +76,16 @@ class IRValidationTests(unittest.TestCase):
             with self.subTest(generator=generate):
                 with self.assertRaisesRegex(ValueError, "unregistered type"):
                     generate()
+
+    def test_query_parameter_must_be_scalar(self):
+        operation = self.ir["operations"][0]
+        operation["path"] = "/items"
+        operation["parameters"][0] = {
+            "name": "filter", "type": {"kind": "named", "name": "sample::Item"},
+            "in": "query",
+        }
+        with self.assertRaisesRegex(ValueError, "query parameter must be scalar"):
+            validate(self.ir)
 
     def test_same_short_type_name_in_another_namespace_is_valid(self):
         other = copy.deepcopy(self.ir["types"][0])

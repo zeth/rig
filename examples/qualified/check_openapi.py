@@ -2,12 +2,13 @@ import json
 from pathlib import Path
 
 ir = json.loads(Path("build/rig.json").read_text())
-assert ir["ir_version"] == 3
+assert ir["ir_version"] == 4
 assert {entry["cpp_name"] for entry in ir["types"]} == {
     "left::Result", "right::Result", "service::Pair"
 }
 assert {entry["cpp_name"] for entry in ir["operations"]} == {
-    "left::read", "left::by_key", "left::newest", "right::read",
+    "left::read", "left::by_key", "left::newest", "left::limited", "left::query",
+    "right::read",
     "service::echo", "service::check"
 }
 document = json.loads(Path("build/openapi.json").read_text())
@@ -20,6 +21,13 @@ assert schemas["Pair"]["properties"] == {
 assert document["paths"]["/left"]["get"]["operationId"] == "left.read"
 assert document["paths"]["/left/new"]["get"]["operationId"] == "newest"
 assert document["paths"]["/right"]["get"]["operationId"] == "right.read"
+assert document["paths"]["/left/limited"]["get"]["parameters"] == [{
+    "name": "limit", "in": "query", "required": True, "schema": {"type": "integer"}
+}]
+assert document["paths"]["/left/query"]["get"]["parameters"] == [
+    {"name": "text", "in": "query", "required": True, "schema": {"type": "string"}},
+    {"name": "enabled", "in": "query", "required": True, "schema": {"type": "boolean"}},
+]
 assert document["paths"]["/left/{key}"]["get"]["responses"]["400"]["content"]["application/json"]["schema"] == {
     "$ref": "#/components/schemas/RigInvalidRequest"
 }

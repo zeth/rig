@@ -1,10 +1,10 @@
-"""Validation and shared route rules for RIG IR version 3."""
+"""Validation and shared route rules for RIG IR version 4."""
 
 import re
 from collections import Counter
 
 
-VERSION = 3
+VERSION = 4
 BUILTINS = {"int", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -238,14 +238,22 @@ def validate(document):
         by_name = {}
         for parameter_index, parameter in enumerate(parameters):
             parameter_location = f"{location}.parameters[{parameter_index}]"
-            parameter = _object(parameter, parameter_location, ("name", "type"))
+            parameter = _object(parameter, parameter_location, ("name", "type"), ("in",))
             parameter_name = _name(parameter["name"], f"{parameter_location}.name")
             _unique(parameter_names, parameter_name, parameter_location, "parameter")
             type_ref(parameter["type"], f"{parameter_location}.type")
+            if "in" in parameter:
+                if parameter["in"] != "query":
+                    raise ValueError(f"{parameter_location}.in: unsupported parameter location")
+                if parameter["type"]["kind"] != "builtin":
+                    raise ValueError(f"{parameter_location}: query parameter must be scalar")
             by_name[parameter_name] = parameter
         type_ref(operation["returns"], f"{location}.returns")
         path = operation["path"]
         _, captures = route_pattern(path, by_name)
+        for parameter in parameters:
+            if parameter.get("in") == "query" and parameter["name"] in captures:
+                raise ValueError(f"{location}: query parameter is also a path placeholder")
         segments = route_segments(path, by_name)
         route = (method, path)
         if route in routes:
@@ -261,7 +269,10 @@ def validate(document):
                     f"{location}: ambiguous routes: {method} {existing_path} and {method} {path}"
                 )
         routes[route] = segments
-        bodies = parameter_names - captures.keys()
+        bodies = {
+            parameter["name"] for parameter in parameters
+            if parameter["name"] not in captures and parameter.get("in") != "query"
+        }
         if len(bodies) > 1:
             raise ValueError(f"{location}: operation {name} has multiple body parameters")
         if bodies and method in ("GET", "DELETE"):

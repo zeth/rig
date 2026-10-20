@@ -85,6 +85,13 @@ def convert(ir, title="API", version="0.1.0"):
                     "schema": schema(parameter["type"]),
                 })
                 placeholders.remove(name)
+            elif parameter.get("in") == "query":
+                parameters.append({
+                    "name": name,
+                    "in": "query",
+                    "required": True,
+                    "schema": schema(parameter["type"]),
+                })
             else:
                 bodies.append(parameter)
 

@@ -9,6 +9,8 @@ struct Result { int value; };
 RIG_ROUTE(GET, "/left") Result read();
 RIG_ROUTE(GET, "/left/{key}") Result by_key(std::string key);
 RIG_ROUTE(GET, "/left/new") Result newest();
+RIG_ROUTE(GET, "/left/limited") Result limited(int limit RIG_QUERY);
+RIG_ROUTE(GET, "/left/query") Result query(std::string text RIG_QUERY, bool enabled RIG_QUERY);
 }
 
 namespace right {

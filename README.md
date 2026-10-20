@@ -90,6 +90,9 @@ RIG uses modern compiler reflection to inspect ordinary C++20 code, extract its 
 RIG_ROUTE(GET, "/items/{id}")
 rig::result<Item, rig::error<404, ErrorResponse>> get_item(ItemId id);
 
+RIG_ROUTE(GET, "/items")
+ItemList list_items(int limit RIG_QUERY);
+
 RIG_ROUTE(POST, "/items")
 Item create_item(CreateItemRequest request);
 ```
@@ -131,10 +134,11 @@ or compiles an explicit entry point. It runs the inspector, validates its IR,
 and writes that IR to standard output. Pass application include paths and
 other compiler flags after `--`; use `--cxx` to select a compiler.
 Run `rig validate < rig.json` to check the shared IR contract without generating
-output. See [IR version 3](docs/ir-v3.md) for its format and current rules.
+output. See [IR version 4](docs/ir-v4.md) for its format and current rules.
 
 Current conventions are intentionally small: a parameter named in the route
-is a path parameter; one remaining parameter becomes a JSON request body;
+is a path parameter; `RIG_QUERY` after a scalar parameter name marks a required
+query parameter; one remaining unmarked parameter becomes a JSON request body;
 registered record fields are required; a successful operation returns
 HTTP 200 with a JSON body; and `rig::result<Success, rig::error<Status, Body>...>`
 declares operation errors. The generated HTTP dispatcher returns the chosen

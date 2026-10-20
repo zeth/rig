@@ -265,6 +265,10 @@ void emit_operation(std::ostream& output) {
         quoted(output, std::meta::identifier_of(parameter));
         output << ",\"type\":";
         emit_type<std::meta::type_of(parameter)>(output);
+        constexpr auto queries = std::define_static_array(
+            std::meta::annotations_of_with_type(parameter, ^^rig::query));
+        static_assert(queries.size() <= 1, "RIG parameters need at most one query annotation");
+        if constexpr (queries.size() == 1) output << ",\"in\":\"query\"";
         output << '}';
     }
     output << "],\"returns\":";
@@ -295,7 +299,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":3,\"types\":[";
+        output_ << "{\"ir_version\":4,\"types\":[";
     }
 
     template <std::meta::info Type>
