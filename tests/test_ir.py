@@ -10,7 +10,7 @@ from rig.openapi import convert
 
 
 VALID = {
-    "ir_version": 4,
+    "ir_version": 5,
     "types": [
         {"kind": "record", "name": "Item", "cpp_name": "sample::Item", "fields": [
             {"name": "id", "type": {"kind": "builtin", "name": "int"}},
@@ -34,6 +34,24 @@ class IRValidationTests(unittest.TestCase):
 
     def test_valid_document_is_returned_unchanged(self):
         self.assertIs(validate(self.ir), self.ir)
+
+    def test_integer_range_validation(self):
+        parameter = self.ir["operations"][0]["parameters"][0]
+        parameter["range"] = {"minimum": 1, "maximum": 20}
+        self.assertIs(validate(self.ir), self.ir)
+        for bounds, message in (
+            ({"minimum": 21, "maximum": 20}, "minimum exceeds maximum"),
+            ({"minimum": True, "maximum": 20}, "bounds must be integers"),
+            ({"minimum": 1, "maximum": 2 ** 31}, "bounds must fit C\\+\\+ int"),
+            ({"minimum": 1}, "missing maximum"),
+        ):
+            with self.subTest(bounds=bounds), self.assertRaisesRegex(ValueError, message):
+                parameter["range"] = bounds
+                validate(self.ir)
+        parameter["range"] = {"minimum": 1, "maximum": 20}
+        parameter["type"] = {"kind": "builtin", "name": "string"}
+        with self.assertRaisesRegex(ValueError, "requires int or optional<int>"):
+            validate(self.ir)
 
     def test_structure_and_references(self):
         cases = [

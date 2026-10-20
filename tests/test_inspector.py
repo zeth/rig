@@ -25,7 +25,7 @@ class InspectorTests(unittest.TestCase):
                 'namespace sample {\n'
                 'struct Item { int value; };\n'
                 'RIG_ROUTE(GET, "/items/{id}") Item get_item(int id);\n'
-                'RIG_ROUTE(GET, "/items") Item list_items(int limit RIG_QUERY);\n'
+                'RIG_ROUTE(GET, "/items") Item list_items(int limit RIG_QUERY RIG_RANGE(1, 20));\n'
                 '}\n'
             )
             (root / "inspect.cpp").write_text(
@@ -38,9 +38,11 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 4)
+            self.assertEqual(ir["ir_version"], 5)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["operations"][1]["parameters"][0]["in"], "query")
+            self.assertEqual(ir["operations"][1]["parameters"][0]["range"],
+                             {"minimum": 1, "maximum": 20})
             self.assertEqual(ir["types"][0]["fields"][0]["name"], "value")
             generated = self.run_inspect(
                 root, "--header", "sample/api.hpp", "--namespace", "sample",

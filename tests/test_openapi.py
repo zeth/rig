@@ -6,7 +6,7 @@ from rig.openapi import convert
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 4,
+            "ir_version": 5,
             "types": [{
                 "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
@@ -75,6 +75,20 @@ class ConversionTests(unittest.TestCase):
             "schema": {"type": "integer"},
         }])
         self.assertIn("400", operation["responses"])
+
+    def test_range_on_path_and_optional_query(self):
+        operation = self.ir["operations"][0]
+        operation["parameters"][0]["range"] = {"minimum": 1, "maximum": 20}
+        operation["parameters"].append({
+            "name": "limit", "in": "query",
+            "type": {"kind": "optional", "value": {"kind": "builtin", "name": "int"}},
+            "range": {"minimum": 2, "maximum": 10},
+        })
+        parameters = convert(self.ir)["paths"]["/results/{id}"]["get"]["parameters"]
+        self.assertEqual(parameters[0]["schema"],
+                         {"type": "integer", "minimum": 1, "maximum": 20})
+        self.assertEqual(parameters[1]["schema"],
+                         {"type": "integer", "minimum": 2, "maximum": 10})
 
     def test_declared_400_and_generated_invalid_request_share_response(self):
         self.ir["operations"][0]["errors"] = [{

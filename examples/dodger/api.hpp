@@ -8,6 +8,11 @@
 
 namespace dodger {
 
+inline constexpr int minimum_arena_width = 8;
+inline constexpr int maximum_arena_width = 80;
+inline constexpr int minimum_arena_height = 6;
+inline constexpr int maximum_arena_height = 40;
+
 enum class Move { Left, Stay, Right };
 enum class GameStatus { Waiting, Running, Finished };
 enum class Winner { Human, Bot, Draw };
@@ -53,8 +58,8 @@ using ActionResult = rig::result<GameState,
     rig::error<409, ErrorResponse>>;
 
 RIG_ROUTE(POST, "/games")
-CreateResult create_game(std::optional<int> width RIG_QUERY,
-                         std::optional<int> height RIG_QUERY);
+CreateResult create_game(std::optional<int> width RIG_QUERY RIG_RANGE(minimum_arena_width, maximum_arena_width),
+                         std::optional<int> height RIG_QUERY RIG_RANGE(minimum_arena_height, maximum_arena_height));
 
 RIG_ROUTE(GET, "/games/{id}")
 GameLookup get_game(int id);

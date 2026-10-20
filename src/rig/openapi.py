@@ -36,6 +36,16 @@ def convert(ir, title="API", version="0.1.0"):
             return {"anyOf": [schema(type_ref["value"]), {"type": "null"}]}
         raise ValueError(f"unsupported type kind: {kind}")
 
+    def parameter_schema(parameter, query=False):
+        ref = query_value_type(parameter["type"]) if query else parameter["type"]
+        result = schema(ref)
+        if "range" in parameter:
+            if ref["kind"] == "optional":
+                result["anyOf"][0].update(parameter["range"])
+            else:
+                result.update(parameter["range"])
+        return result
+
     components = {}
     for qualified, entry in types.items():
         name = schema_names[qualified]
@@ -82,7 +92,7 @@ def convert(ir, title="API", version="0.1.0"):
                     "name": name,
                     "in": "path",
                     "required": True,
-                    "schema": schema(parameter["type"]),
+                    "schema": parameter_schema(parameter),
                 })
                 placeholders.remove(name)
             elif parameter.get("in") == "query":
@@ -90,7 +100,7 @@ def convert(ir, title="API", version="0.1.0"):
                     "name": name,
                     "in": "query",
                     "required": parameter["type"]["kind"] != "optional",
-                    "schema": schema(query_value_type(parameter["type"])),
+                    "schema": parameter_schema(parameter, query=True),
                 })
             else:
                 bodies.append(parameter)
@@ -129,7 +139,7 @@ def convert(ir, title="API", version="0.1.0"):
         if bodies:
             result["requestBody"] = {
                 "required": True,
-                "content": {"application/json": {"schema": schema(bodies[0]["type"])}}
+                "content": {"application/json": {"schema": parameter_schema(bodies[0])}}
             }
         methods = paths.setdefault(path, {})
         methods[method] = result

@@ -1,4 +1,4 @@
-# RIG IR version 4
+# RIG IR version 5
 
 RIG's C++26 inspector writes one JSON object to standard output. The `rig`
 generators read that object from standard input. `rig validate < rig.json`
@@ -13,7 +13,7 @@ the order of the requested namespaces.
 
 ```json
 {
-  "ir_version": 4,
+  "ir_version": 5,
   "types": [
     {"kind": "record", "name": "Item", "cpp_name": "app::Item", "fields": [
       {"name": "id", "type": {"kind": "builtin", "name": "int"}}
@@ -73,6 +73,13 @@ placeholders. Literals use ASCII letters, digits, `.`, `_`, `~`, and `-`.
 A placeholder must name exactly one parameter of type `int` or `string`.
 Parameters annotated `RIG_QUERY` after their C++ name have `"in": "query"`
 in IR. Query parameters support scalar `int`, `bool`, and `std::string` values.
+An `int` or `std::optional<int>` parameter can also carry
+`RIG_RANGE(minimum, maximum)` after its name. Both bounds are inclusive
+integer constants, with minimum no greater than maximum. The inspector emits
+`"range": {"minimum": minimum, "maximum": maximum}` on that parameter.
+OpenAPI adds the bounds to its integer schema, and generated dispatch rejects
+out-of-range supplied values with HTTP 400 and `code: "invalid_request"`.
+An omitted optional value passes without a range check.
 `std::optional<T>` for one of these scalars makes it omittable: dispatch passes
 `std::nullopt`, and OpenAPI sets `required` to false with the scalar schema.
 Other parameters form the JSON request body; at most one is allowed. For
@@ -91,9 +98,9 @@ dispatch uses the same precedence independently of declaration order.
 Record fields are all present in JSON. An `optional` field is present with
 either a value or `null`; it does not mean the field can be omitted. Successful
 operations have a JSON response with HTTP 200. Unknown keys and unsupported
-types are rejected so that every generator interprets version 4 the same way.
+types are rejected so that every generator interprets version 5 the same way.
 Older IR is rejected; regenerate it with `rig inspect` before running the
-version 4 generators. `json-codec` and `http-routes` use `cpp_name` and no
+version 5 generators. `json-codec` and `http-routes` use `cpp_name` and no
 longer take `--namespace`.
 
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.

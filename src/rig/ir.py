@@ -1,10 +1,10 @@
-"""Validation and shared route rules for RIG IR version 4."""
+"""Validation and shared route rules for RIG IR version 5."""
 
 import re
 from collections import Counter
 
 
-VERSION = 4
+VERSION = 5
 BUILTINS = {"int", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -243,10 +243,22 @@ def validate(document):
         by_name = {}
         for parameter_index, parameter in enumerate(parameters):
             parameter_location = f"{location}.parameters[{parameter_index}]"
-            parameter = _object(parameter, parameter_location, ("name", "type"), ("in",))
+            parameter = _object(parameter, parameter_location, ("name", "type"), ("in", "range"))
             parameter_name = _name(parameter["name"], f"{parameter_location}.name")
             _unique(parameter_names, parameter_name, parameter_location, "parameter")
             type_ref(parameter["type"], f"{parameter_location}.type")
+            if "range" in parameter:
+                bounds = _object(parameter["range"], f"{parameter_location}.range",
+                                 ("minimum", "maximum"))
+                if any(type(bounds[key]) is not int for key in ("minimum", "maximum")):
+                    raise ValueError(f"{parameter_location}.range: bounds must be integers")
+                if any(not -(2 ** 31) <= bounds[key] < 2 ** 31
+                       for key in ("minimum", "maximum")):
+                    raise ValueError(f"{parameter_location}.range: bounds must fit C++ int")
+                if bounds["minimum"] > bounds["maximum"]:
+                    raise ValueError(f"{parameter_location}.range: minimum exceeds maximum")
+                if query_value_type(parameter["type"]) != {"kind": "builtin", "name": "int"}:
+                    raise ValueError(f"{parameter_location}.range: requires int or optional<int>")
             if "in" in parameter:
                 if parameter["in"] != "query":
                     raise ValueError(f"{parameter_location}.in: unsupported parameter location")

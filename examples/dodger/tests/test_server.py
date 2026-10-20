@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "build"))
 
 from dodger_api_client import Client
 from dodger_api_client.api.default import create_game, get_game, submit_action, submit_human_action
-from dodger_api_client.models import Action, ErrorResponse, GameState, Move
+from dodger_api_client.models import Action, ErrorResponse, GameState, Move, RigInvalidRequest
 
 
 def validate(value, schema, components):
@@ -121,7 +121,7 @@ def main():
                      create_schema["content"]["application/json"]["schema"], components)
             invalid_size = create_game.sync_detailed(client=client, width=7)
             assert invalid_size.status_code == HTTPStatus.BAD_REQUEST
-            assert isinstance(invalid_size.parsed, ErrorResponse)
+            assert isinstance(invalid_size.parsed, RigInvalidRequest)
             found = get_game.sync_detailed(id=1, client=client)
             assert found.status_code == HTTPStatus.OK
             assert isinstance(found.parsed, GameState)

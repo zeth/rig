@@ -43,7 +43,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 80
             }
           },
           {
@@ -51,7 +53,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 6,
+              "maximum": 40
             }
           }
         ]

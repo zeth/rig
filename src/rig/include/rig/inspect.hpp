@@ -269,6 +269,14 @@ void emit_operation(std::ostream& output) {
             std::meta::annotations_of_with_type(parameter, ^^rig::query));
         static_assert(queries.size() <= 1, "RIG parameters need at most one query annotation");
         if constexpr (queries.size() == 1) output << ",\"in\":\"query\"";
+        constexpr auto ranges = std::define_static_array(
+            std::meta::annotations_of_with_type(parameter, ^^rig::range));
+        static_assert(ranges.size() <= 1, "RIG parameters need at most one range annotation");
+        if constexpr (ranges.size() == 1) {
+            constexpr auto bounds = [:std::meta::constant_of(ranges[0]):];
+            output << ",\"range\":{\"minimum\":" << bounds.minimum
+                   << ",\"maximum\":" << bounds.maximum << '}';
+        }
         output << '}';
     }
     output << "],\"returns\":";
@@ -299,7 +307,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":4,\"types\":[";
+        output_ << "{\"ir_version\":5,\"types\":[";
     }
 
     template <std::meta::info Type>

@@ -28,7 +28,8 @@ Game::Game(int width, int height)
     : state_{1, 0, width, height, GameStatus::Waiting,
              {human_start(width), kLives, 0}, {bot_start(width), kLives, 0},
              {}, std::nullopt} {
-    if (width < 8 || width > 80 || height < 6 || height > 40)
+    if (width < minimum_arena_width || width > maximum_arena_width ||
+        height < minimum_arena_height || height > maximum_arena_height)
         throw std::invalid_argument("arena width must be 8 to 80 and height 6 to 40");
 }
 

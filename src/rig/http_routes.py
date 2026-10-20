@@ -49,6 +49,14 @@ def generate(ir, codec_header):
         "inline response invalid_request(const std::string& message) {",
         '    return {400, json{{"code", "invalid_request"}, {"message", message}}};',
         "}",
+        "inline void enforce_range(int value, int minimum, int maximum, const char* name) {",
+        "    if (value < minimum || value > maximum)",
+        '        throw std::invalid_argument(std::string("out of range: ") + name);',
+        "}",
+        "inline void enforce_range(const std::optional<int>& value,",
+        "                          int minimum, int maximum, const char* name) {",
+        "    if (value) enforce_range(*value, minimum, maximum, name);",
+        "}",
         "inline int hex_digit(char character) {",
         "    if (character >= '0' && character <= '9') return character - '0';",
         "    if (character >= 'a' && character <= 'f') return character - 'a' + 10;",
@@ -187,6 +195,13 @@ def generate(ir, codec_header):
                 value = f"decode_body<{param_type}>(body)"
             decodes.append(f"            argument_{position}.emplace({value});")
             arguments.append(f"std::move(*argument_{position})")
+        for position, parameter in enumerate(operation["parameters"]):
+            if "range" in parameter:
+                bounds = parameter["range"]
+                decodes.append(
+                    f'            enforce_range(*argument_{position}, '
+                    f'{bounds["minimum"]}, {bounds["maximum"]}, "{parameter["name"]}");'
+                )
         if decodes:
             lines += [
                 "        try {",
