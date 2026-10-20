@@ -10,9 +10,9 @@ CLIENT_BIN = $(abspath build/client-venv/bin)
 
 .PHONY: generate check server play clean
 
-build/rig.json: inspect.cpp api.hpp $(RIG_SOURCE)
+build/rig.json: api.hpp $(RIG_SOURCE)
 	mkdir -p build
-	$(RIG) inspect inspect.cpp --cxx $(CXX) -- -I. > $@
+	$(RIG) inspect --header api.hpp --namespace dodger --cxx $(CXX) -- -I. > $@
 
 build/openapi.json: build/rig.json $(RIG_SOURCE)
 	$(RIG) openapi --title 'Dodger API' < $< > $@

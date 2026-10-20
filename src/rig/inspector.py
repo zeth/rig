@@ -6,14 +6,48 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .ir import validate
+from .ir import identifier, validate
 
 
-def inspect(source, cxx="g++", compiler_flags=()):
-    """Return validated IR bytes from a reflection entry point."""
+def _registration_source(header, namespace):
+    if not isinstance(header, str) or not header or any(
+        ord(character) < 32 or character in ('"', '\\') for character in header
+    ):
+        raise ValueError(f"invalid C++ header path: {header!r}")
+    if not isinstance(namespace, str):
+        raise ValueError(f"invalid C++ namespace: {namespace!r}")
+    try:
+        parts = [identifier(part) for part in namespace.split("::")]
+    except ValueError:
+        raise ValueError(f"invalid C++ namespace: {namespace!r}") from None
+    return (
+        f'#include "{header}"\n'
+        '#include <rig/inspect.hpp>\n'
+        '#include <iostream>\n'
+        'int main() {\n'
+        '    rig::writer output(std::cout);\n'
+        f'    output.add_namespace<^^{"::".join(parts)}>();\n'
+        '    output.finish();\n'
+        '}\n'
+    )
+
+
+def inspect(source=None, cxx="g++", compiler_flags=(), *, header=None, namespace=None):
+    """Return validated IR bytes from an entry point or C++20 header."""
+    if (source is None) == (header is None):
+        raise ValueError("provide exactly one inspection source or --header")
+    if header is None and namespace is not None:
+        raise ValueError("--namespace requires --header")
+    if header is not None and namespace is None:
+        raise ValueError("--header requires --namespace")
+    registration = _registration_source(header, namespace) if header is not None else None
     include_dir = Path(__file__).resolve().parent / "include"
     with tempfile.TemporaryDirectory(prefix="rig-inspect-") as directory:
         executable = Path(directory) / "inspector"
+        if registration is not None:
+            source = Path(directory) / "registration.cpp"
+            source.write_text(registration)
+            compiler_flags = (f"-I{Path.cwd()}", *compiler_flags)
         command = [
             cxx, "-std=c++26", "-freflection", "-DRIG_GENERATING",
             f"-I{include_dir}", source, "-o", str(executable), *compiler_flags,

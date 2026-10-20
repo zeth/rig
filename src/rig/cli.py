@@ -25,9 +25,14 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("include-dir", help="print the installed C++ header directory")
     inspector = commands.add_parser("inspect", help="compile and run a C++26 inspector")
-    inspector.add_argument("source", help="C++ inspection entry point")
+    inspector.add_argument("source", nargs="?", help="optional C++ inspection entry point")
+    inspector.add_argument("--header", help="C++20 API header to inspect")
+    inspector.add_argument("--namespace", help="namespace containing annotated operations")
     inspector.add_argument("--cxx", default="g++", help="C++26 compiler (default: g++)")
-    inspector.epilog = "Pass additional compiler flags after --, for example: -- -Iinclude"
+    inspector.epilog = (
+        "Use either an entry point source or --header with --namespace. "
+        "Pass additional compiler flags after --, for example: -- -Iinclude"
+    )
     commands.add_parser("validate", help="validate IR on stdin")
     openapi = commands.add_parser("openapi", help="generate OpenAPI JSON from IR on stdin")
     openapi.add_argument("--title", default="API")
@@ -44,7 +49,10 @@ def main(argv=None):
         if args.command == "include-dir":
             print(Path(__file__).resolve().parent / "include")
         elif args.command == "inspect":
-            sys.stdout.buffer.write(inspect(args.source, args.cxx, compiler_flags))
+            sys.stdout.buffer.write(inspect(
+                args.source, args.cxx, compiler_flags,
+                header=args.header, namespace=args.namespace,
+            ))
         elif args.command == "embed-openapi":
             sys.stdout.write(embed_openapi(sys.stdin.buffer.read()))
         else:

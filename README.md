@@ -124,9 +124,10 @@ JSON. `rig openapi` emits OpenAPI 3.1 JSON; `rig json-codec` emits C++20
 `rig embed-openapi` emits a header containing the exact OpenAPI bytes. Each
 generator reads IR (or OpenAPI bytes for `embed-openapi`) on standard input
 and writes its result on standard output.
-`rig inspect` compiles a C++26 entry point, runs it, validates its IR, and
-writes that IR to standard output. Pass application include paths and other
-compiler flags after `--`; use `--cxx` to select a compiler.
+`rig inspect` creates a C++26 entry point from a C++20 header and namespace,
+or compiles an explicit entry point. It runs the inspector, validates its IR,
+and writes that IR to standard output. Pass application include paths and
+other compiler flags after `--`; use `--cxx` to select a compiler.
 Run `rig validate < rig.json` to check the shared IR contract without generating
 output. See [IR version 2](docs/ir-v2.md) for its format and current rules.
 
@@ -148,27 +149,21 @@ namespace, matching Dodger's API. The route generator currently supports
 literal path segments and whole-segment `int` or string placeholders.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
-selected functions with `RIG_ROUTE`, and nominate the containing namespace in
-a C++26 entry point:
+selected functions with `RIG_ROUTE`, and name its namespace at generation
+time:
 
-```cpp
-#include "api.hpp"
-#include <rig/inspect.hpp>
-#include <iostream>
-
-rig::writer output(std::cout);
-output.add_namespace<^^catalog>();
-output.finish();
+```sh
+rig inspect --header api.hpp --namespace catalog -- -I. > rig.json
+rig openapi --title 'Catalog API' < rig.json > openapi.json
 ```
 
-Run `rig inspect inspect.cpp -- -I.` in the directory containing this entry
-point and `api.hpp`, then pipe its JSON output to
-`rig openapi --title 'Catalog API'`. RIG supplies the C++26 reflection flags
-and its installed include directory. Namespace discovery sees
+RIG creates the C++26 entry point, supplies the reflection flags and its
+installed include directory, and validates the resulting IR. Namespace discovery sees
 directly declared functions with a route annotation and follows their
 referenced record and enum types. Unsupported references fail during OpenAPI
-conversion. `rig::writer` also retains explicit `add_type` and
-`add_operation` calls for cases where a namespace root is unsuitable.
+conversion. For explicit registration, write a C++26 entry point using
+`rig::writer` and pass it to `rig inspect inspect.cpp -- -I.`. Catalog exercises
+that form; Dodger uses header and namespace mode.
 
 In `examples/dodger`, run `make server` or `make play` after installing RIG.
 Its C++20 server uses the generated codec and dispatch, and serves the generated

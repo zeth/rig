@@ -6,6 +6,8 @@ checks the complete document and exits without output on success. The IR is a
 build artifact; its version is independent of the Python package version.
 `rig inspect inspect.cpp -- -I.` compiles and runs an inspection entry point,
 validates its output, and writes the original IR bytes to standard output.
+`rig inspect --header api.hpp --namespace app -- -I.` creates that entry point
+from a C++20 API header and namespace.
 
 ```json
 {

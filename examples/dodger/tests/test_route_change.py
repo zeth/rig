@@ -26,12 +26,13 @@ def main():
         temporary = Path(directory)
         (temporary / "build").mkdir()
         (temporary / "api.hpp").write_text(source.replace(original, changed))
-        for name in ("inspect.cpp", "game.hpp", "game.cpp", "server.cpp"):
+        for name in ("game.hpp", "game.cpp", "server.cpp"):
             shutil.copyfile(root / name, temporary / name)
         shutil.copyfile(root / "build" / "dodger_json.hpp", temporary / "build" / "dodger_json.hpp")
 
         ir = json.loads(subprocess.check_output([
-            rig, "inspect", "inspect.cpp", "--cxx", compiler, "--", "-I.",
+            rig, "inspect", "--header", "api.hpp", "--namespace", "dodger",
+            "--cxx", compiler, "--", "-I.",
         ], cwd=temporary))
         openapi_json = subprocess.check_output(
             [rig, "openapi", "--title", "Dodger API"], input=json.dumps(ir), text=True

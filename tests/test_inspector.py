@@ -40,6 +40,47 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["ir_version"], 2)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["types"][0]["fields"][0]["name"], "value")
+            generated = self.run_inspect(
+                root, "--header", "sample/api.hpp", "--namespace", "sample",
+                "--", "-Iinclude",
+            )
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(generated.stdout, result.stdout)
+
+    def test_header_mode_rejects_invalid_registration_inputs(self):
+        cases = (
+            (("--header", "api.hpp"), "--header requires --namespace"),
+            (("inspect.cpp", "--namespace", "sample"), "--namespace requires --header"),
+            (("inspect.cpp", "--header", "api.hpp", "--namespace", "sample"),
+             "exactly one inspection source"),
+            (("--header", 'api.hpp"\n#error injected', "--namespace", "sample"),
+             "invalid C++ header path"),
+            (("--header", "api.hpp", "--namespace", "sample::bad-name"),
+             "invalid C++ namespace"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            for arguments, message in cases:
+                with self.subTest(arguments=arguments):
+                    result = self.run_inspect(directory, *arguments)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn(message, result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
+
+    def test_header_mode_accepts_nested_namespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                'namespace sample::nested {\n'
+                'struct Item { int value; };\n'
+                'RIG_ROUTE(GET, "/items") Item get_item();\n'
+                '}\n'
+            )
+            result = self.run_inspect(
+                directory, "--header", "api.hpp", "--namespace", "sample::nested"
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["operations"][0]["name"], "get_item")
 
     def test_compilation_failure_has_no_ir_output(self):
         with tempfile.TemporaryDirectory() as directory:
