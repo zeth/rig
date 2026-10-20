@@ -447,6 +447,29 @@ void emit_operation(std::ostream& output) {
                 output << ",\"range\":{\"minimum\":" << bounds.minimum
                        << ",\"maximum\":" << bounds.maximum << '}';
             }
+            constexpr auto choices = std::define_static_array(
+                std::meta::annotations_of_with_type(parameter, ^^rig::int_values));
+            static_assert(choices.size() <= 1, "RIG parameters need at most one integer enum");
+            static_assert(ranges.size() == 0 || choices.size() == 0,
+                          "RIG parameters cannot have both a range and integer enum");
+            if constexpr (choices.size() == 1) {
+                constexpr auto values = [:std::meta::constant_of(choices[0]):];
+                output << ",\"int_values\":[";
+                for (int index = 0; index < values.count; ++index) {
+                    if (index) output << ',';
+                    output << values.values[index];
+                }
+                output << ']';
+            }
+            constexpr auto parameter_descriptions = std::define_static_array(
+                std::meta::annotations_of_with_type(parameter, ^^rig::parameter_description));
+            static_assert(parameter_descriptions.size() <= 1,
+                          "RIG parameters need at most one description");
+            if constexpr (parameter_descriptions.size() == 1) {
+                constexpr auto value = [:std::meta::constant_of(parameter_descriptions[0]):];
+                output << ",\"description\":";
+                quoted(output, value.text);
+            }
             output << '}';
         }
     }
@@ -503,7 +526,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":11,\"types\":[";
+        output_ << "{\"ir_version\":12,\"types\":[";
     }
 
     template <std::meta::info Type>

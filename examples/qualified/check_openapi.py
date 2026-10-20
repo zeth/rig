@@ -2,13 +2,13 @@ import json
 from pathlib import Path
 
 ir = json.loads(Path("build/rig.json").read_text())
-assert ir["ir_version"] == 11
+assert ir["ir_version"] == 12
 assert {entry["cpp_name"] for entry in ir["types"]} == {
     "left::Result", "right::Result", "service::Pair"
 }
 assert {entry["cpp_name"] for entry in ir["operations"]} == {
     "left::read", "left::by_key", "left::newest", "left::limited", "left::query",
-    "left::filter",
+    "left::filter", "left::choices",
     "right::read",
     "service::echo", "service::check"
 }
@@ -34,6 +34,11 @@ assert document["paths"]["/left/filter"]["get"]["parameters"] == [
     {"name": "enabled", "in": "query", "required": False, "schema": {"type": "boolean"}},
     {"name": "text", "in": "query", "required": False, "schema": {"type": "string"}},
 ]
+assert document["paths"]["/left/choices"]["get"]["parameters"] == [{
+    "name": "selected", "in": "query", "required": False,
+    "schema": {"type": "integer", "enum": [0, 1]},
+    "description": "Choose zero or one",
+}]
 assert document["paths"]["/left/{key}"]["get"]["responses"]["400"]["content"]["application/json"]["schema"] == {
     "$ref": "#/components/schemas/RigInvalidRequest"
 }

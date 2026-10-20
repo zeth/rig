@@ -28,7 +28,7 @@ class InspectorTests(unittest.TestCase):
             )
             string = {"kind": "builtin", "name": "string"}
             optional_string = {"kind": "optional", "value": string}
-            ir = {"ir_version": 11, "types": [{
+            ir = {"ir_version": 12, "types": [{
                 "kind": "record", "name": "Item", "cpp_name": "sample::Item",
                 "fields": [
                     {"name": "count", "type": {"kind": "builtin", "name": "int64"}},
@@ -82,6 +82,9 @@ class InspectorTests(unittest.TestCase):
                 'std::optional<std::string> error RIG_NULLABLE; };\n'
                 'RIG_ROUTE(GET, "/items/{id}") Item get_item(Context& context RIG_CONTEXT, int id);\n'
                 'RIG_ROUTE(GET, "/items") Item list_items(int limit RIG_QUERY RIG_RANGE(1, 20));\n'
+                'RIG_ROUTE(GET, "/choices") Item choices('
+                'std::optional<int> selected RIG_QUERY RIG_INT_VALUES(0, 1) '
+                'RIG_PARAMETER_DESCRIPTION("Choose zero or one"));\n'
                 '}\n'
             )
             (root / "inspect.cpp").write_text(
@@ -94,13 +97,16 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 11)
+            self.assertEqual(ir["ir_version"], 12)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["operations"][0]["context_parameters"], ["context"])
             self.assertEqual([p["name"] for p in ir["operations"][0]["parameters"]], ["id"])
             self.assertEqual(ir["operations"][1]["parameters"][0]["in"], "query")
             self.assertEqual(ir["operations"][1]["parameters"][0]["range"],
                              {"minimum": 1, "maximum": 20})
+            self.assertEqual(ir["operations"][2]["parameters"][0]["int_values"], [0, 1])
+            self.assertEqual(ir["operations"][2]["parameters"][0]["description"],
+                             "Choose zero or one")
             self.assertEqual(ir["types"][0]["fields"][0]["name"], "value")
             self.assertEqual(ir["types"][0]["fields"][0]["minimum"], 1)
             self.assertEqual(ir["types"][0]["fields"][0]["description"], "Count")

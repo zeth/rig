@@ -35,6 +35,7 @@ def generate(ir, codec_header):
         "#pragma once",
         f'#include "{codec_header}"',
         "#include <charconv>",
+        "#include <initializer_list>",
         "#include <map>",
         "#include <optional>",
         "#include <regex>",
@@ -59,6 +60,14 @@ def generate(ir, codec_header):
         "inline void enforce_range(const std::optional<int>& value,",
         "                          int minimum, int maximum, const char* name) {",
         "    if (value) enforce_range(*value, minimum, maximum, name);",
+        "}",
+        "inline void enforce_int_values(int value, std::initializer_list<int> choices, const char* name) {",
+        "    for (int choice : choices) if (value == choice) return;",
+        '    throw std::invalid_argument(std::string("invalid integer value: ") + name);',
+        "}",
+        "inline void enforce_int_values(const std::optional<int>& value,",
+        "                               std::initializer_list<int> choices, const char* name) {",
+        "    if (value) enforce_int_values(*value, choices, name);",
         "}",
         "inline int hex_digit(char character) {",
         "    if (character >= '0' && character <= '9') return character - '0';",
@@ -204,6 +213,12 @@ def generate(ir, codec_header):
                 decodes.append(
                     f'            enforce_range(*argument_{position}, '
                     f'{bounds["minimum"]}, {bounds["maximum"]}, "{parameter["name"]}");'
+                )
+            if "int_values" in parameter:
+                values = ", ".join(str(value) for value in parameter["int_values"])
+                decodes.append(
+                    f'            enforce_int_values(*argument_{position}, '
+                    f'{{{values}}}, "{parameter["name"]}");'
                 )
         if decodes:
             lines += [

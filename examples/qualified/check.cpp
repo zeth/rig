@@ -19,6 +19,7 @@ left::Result left::filter(std::optional<int> limit, std::optional<bool> enabled,
     if (text) value += *text == "a b" ? 1000 : 2000;
     return {value};
 }
+left::Result left::choices(std::optional<int> selected) { return {selected.value_or(-1)}; }
 right::Result right::read() { return {"seven"}; }
 service::Pair service::echo(Pair pair) { return pair; }
 rig::result<service::Pair, rig::error<422, left::Result>, rig::error<503, right::Result>>
@@ -54,6 +55,9 @@ int main() {
     const auto filter_empty_text = rig_http::dispatch("GET", "/left/filter?text=", "");
     const auto filter_invalid = rig_http::dispatch("GET", "/left/filter?limit=no", "");
     const auto filter_bad_bool = rig_http::dispatch("GET", "/left/filter?enabled=yes", "");
+    const auto choices_omitted = rig_http::dispatch("GET", "/left/choices", "");
+    const auto choices_one = rig_http::dispatch("GET", "/left/choices?selected=1", "");
+    const auto choices_invalid = rig_http::dispatch("GET", "/left/choices?selected=2", "");
     const auto right = rig_http::dispatch("GET", "/right", "");
     const auto pair = rig_http::dispatch(
         "POST", "/pairs", R"({"left":{"value":7},"right":{"value":"seven"}})");
@@ -98,6 +102,11 @@ int main() {
            filter_invalid->body["code"] == "invalid_request");
     assert(filter_bad_bool && filter_bad_bool->status == 400 &&
            filter_bad_bool->body["code"] == "invalid_request");
+    assert(choices_omitted && choices_omitted->status == 200 &&
+           choices_omitted->body["value"] == -1);
+    assert(choices_one && choices_one->status == 200 && choices_one->body["value"] == 1);
+    assert(choices_invalid && choices_invalid->status == 400 &&
+           choices_invalid->body["code"] == "invalid_request");
     assert(right && right->status == 200 && right->body["value"] == "seven");
     assert(pair && pair->status == 200 && pair->body["left"]["value"] == 7 &&
            pair->body["right"]["value"] == "seven");

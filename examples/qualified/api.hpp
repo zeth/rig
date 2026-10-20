@@ -15,6 +15,9 @@ RIG_ROUTE(GET, "/left/query") Result query(std::string text RIG_QUERY, bool enab
 RIG_ROUTE(GET, "/left/filter") Result filter(std::optional<int> limit RIG_QUERY,
                                               std::optional<bool> enabled RIG_QUERY,
                                               std::optional<std::string> text RIG_QUERY);
+RIG_ROUTE(GET, "/left/choices") Result choices(
+    std::optional<int> selected RIG_QUERY RIG_INT_VALUES(0, 1)
+        RIG_PARAMETER_DESCRIPTION("Choose zero or one"));
 }
 
 namespace right {

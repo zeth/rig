@@ -10,7 +10,7 @@ from rig.openapi import convert
 
 
 VALID = {
-    "ir_version": 11,
+    "ir_version": 12,
     "types": [
         {"kind": "record", "name": "Item", "cpp_name": "sample::Item", "fields": [
             {"name": "id", "type": {"kind": "builtin", "name": "int"}},
@@ -51,6 +51,26 @@ class IRValidationTests(unittest.TestCase):
         parameter["range"] = {"minimum": 1, "maximum": 20}
         parameter["type"] = {"kind": "builtin", "name": "string"}
         with self.assertRaisesRegex(ValueError, "requires int or optional<int>"):
+            validate(self.ir)
+
+    def test_integer_choices_and_parameter_description_validation(self):
+        parameter = self.ir["operations"][0]["parameters"][0]
+        parameter["int_values"] = [0, 1]
+        parameter["description"] = "Choose zero or one."
+        self.assertIs(validate(self.ir), self.ir)
+        for values in ([0, 0], [True, 1], [], [2 ** 31]):
+            with self.subTest(values=values), self.assertRaisesRegex(
+                ValueError, "expected unique C\\+\\+ integers"
+            ):
+                parameter["int_values"] = values
+                validate(self.ir)
+        parameter["int_values"] = [0, 1]
+        parameter["range"] = {"minimum": 0, "maximum": 1}
+        with self.assertRaisesRegex(ValueError, "cannot be combined"):
+            validate(self.ir)
+        parameter.pop("range")
+        parameter["description"] = ""
+        with self.assertRaisesRegex(ValueError, "expected nonempty text"):
             validate(self.ir)
 
     def test_boolean_value_and_operation_text_validation(self):

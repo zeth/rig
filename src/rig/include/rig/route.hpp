@@ -3,6 +3,7 @@
 // Annotation values must have structural types. Fixed arrays keep the
 // declaration valid under GCC's experimental C++26 reflection implementation.
 #ifdef RIG_GENERATING
+#include <cstddef>
 #include <meta>
 namespace rig {
 struct route {
@@ -12,6 +13,14 @@ struct route {
 struct query {};
 struct context {};
 struct range { int minimum; int maximum; };
+struct int_values { int values[16]; int count; };
+template <int... Values>
+consteval int_values make_int_values() {
+    static_assert(sizeof...(Values) > 0 && sizeof...(Values) <= 16,
+                  "RIG integer choices require one to sixteen values");
+    return {{Values...}, static_cast<int>(sizeof...(Values))};
+}
+struct parameter_description { char text[512]; };
 struct minimum { int value; };
 struct field_description { char text[256]; };
 struct omit_empty {};
@@ -34,6 +43,8 @@ struct error_response {
 #define RIG_QUERY [[=::rig::query{}]]
 #define RIG_CONTEXT [[=::rig::context{}]]
 #define RIG_RANGE(minimum, maximum) [[=::rig::range{minimum, maximum}]]
+#define RIG_INT_VALUES(...) [[=::rig::make_int_values<__VA_ARGS__>()]]
+#define RIG_PARAMETER_DESCRIPTION(text) [[=::rig::parameter_description{text}]]
 #define RIG_MINIMUM(value) [[=::rig::minimum{value}]]
 #define RIG_FIELD_DESCRIPTION(text) [[=::rig::field_description{text}]]
 #define RIG_OMIT_EMPTY [[=::rig::omit_empty{}]]
@@ -53,6 +64,8 @@ struct error_response {
 #define RIG_QUERY
 #define RIG_CONTEXT
 #define RIG_RANGE(minimum, maximum)
+#define RIG_INT_VALUES(...)
+#define RIG_PARAMETER_DESCRIPTION(text)
 #define RIG_MINIMUM(value)
 #define RIG_FIELD_DESCRIPTION(text)
 #define RIG_OMIT_EMPTY

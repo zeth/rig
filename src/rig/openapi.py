@@ -49,6 +49,8 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 result["anyOf"][0].update(parameter["range"])
             else:
                 result.update(parameter["range"])
+        if "int_values" in parameter:
+            result["enum"] = parameter["int_values"]
         return result
 
     components = {}
@@ -113,20 +115,26 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         for parameter in operation["parameters"]:
             name = parameter["name"]
             if name in placeholders:
-                parameters.append({
+                item = {
                     "name": name,
                     "in": "path",
                     "required": True,
                     "schema": parameter_schema(parameter),
-                })
+                }
+                if "description" in parameter:
+                    item["description"] = parameter["description"]
+                parameters.append(item)
                 placeholders.remove(name)
             elif parameter.get("in") == "query":
-                parameters.append({
+                item = {
                     "name": name,
                     "in": "query",
                     "required": parameter["type"]["kind"] != "optional",
                     "schema": parameter_schema(parameter, query=True),
-                })
+                }
+                if "description" in parameter:
+                    item["description"] = parameter["description"]
+                parameters.append(item)
             else:
                 bodies.append(parameter)
 

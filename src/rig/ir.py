@@ -1,10 +1,10 @@
-"""Validation and shared route rules for RIG IR version 11."""
+"""Validation and shared route rules for RIG IR version 12."""
 
 import re
 from collections import Counter
 
 
-VERSION = 11
+VERSION = 12
 BUILTINS = {"int", "int64", "double", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -301,7 +301,8 @@ def validate(document):
         by_name = {}
         for parameter_index, parameter in enumerate(parameters):
             parameter_location = f"{location}.parameters[{parameter_index}]"
-            parameter = _object(parameter, parameter_location, ("name", "type"), ("in", "range"))
+            parameter = _object(parameter, parameter_location, ("name", "type"),
+                                ("in", "range", "int_values", "description"))
             parameter_name = _name(parameter["name"], f"{parameter_location}.name")
             _unique(parameter_names, parameter_name, parameter_location, "parameter")
             if parameter_name in context_names:
@@ -319,6 +320,21 @@ def validate(document):
                     raise ValueError(f"{parameter_location}.range: minimum exceeds maximum")
                 if query_value_type(parameter["type"]) != {"kind": "builtin", "name": "int"}:
                     raise ValueError(f"{parameter_location}.range: requires int or optional<int>")
+            if "int_values" in parameter:
+                values = _array(parameter["int_values"], f"{parameter_location}.int_values")
+                if not 1 <= len(values) <= 16 or any(
+                    type(value) is not int or not -(2 ** 31) <= value < 2 ** 31
+                    for value in values
+                ) or len(set(values)) != len(values):
+                    raise ValueError(f"{parameter_location}.int_values: expected unique C++ integers")
+                if query_value_type(parameter["type"]) != {"kind": "builtin", "name": "int"}:
+                    raise ValueError(f"{parameter_location}.int_values: requires int or optional<int>")
+                if "range" in parameter:
+                    raise ValueError(f"{parameter_location}: range and int_values cannot be combined")
+            if "description" in parameter and (
+                not isinstance(parameter["description"], str) or not parameter["description"]
+            ):
+                raise ValueError(f"{parameter_location}.description: expected nonempty text")
             if "in" in parameter:
                 if parameter["in"] != "query":
                     raise ValueError(f"{parameter_location}.in: unsupported parameter location")
@@ -357,6 +373,9 @@ def validate(document):
             raise ValueError(f"{location}: operation {name} has multiple body parameters")
         if bodies and method in ("GET", "DELETE"):
             raise ValueError(f"{location}: operation {name} has a body with {method}")
+        if any(parameter["name"] in bodies and "description" in parameter
+               for parameter in parameters):
+            raise ValueError(f"{location}: body parameter descriptions are unsupported")
         statuses = set()
         for error_index, error in enumerate(_array(operation.get("errors", []), f"{location}.errors")):
             error_location = f"{location}.errors[{error_index}]"

@@ -7,7 +7,7 @@ from rig.openapi import convert
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 11,
+            "ir_version": 12,
             "types": [{
                 "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
@@ -108,6 +108,21 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(document["components"]["securitySchemes"], {
             "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "token"},
         })
+
+    def test_optional_integer_choices_and_description(self):
+        operation = self.ir["operations"][0]
+        operation["path"] = "/results"
+        operation["parameters"] = [{
+            "name": "selected", "in": "query",
+            "type": {"kind": "optional", "value": {"kind": "builtin", "name": "int"}},
+            "int_values": [0, 1], "description": "Choose zero or one.",
+        }]
+        generated = convert(self.ir)["paths"]["/results"]["get"]
+        self.assertEqual(generated["parameters"], [{
+            "name": "selected", "in": "query", "required": False,
+            "schema": {"type": "integer", "enum": [0, 1]},
+            "description": "Choose zero or one.",
+        }])
 
     def test_integer_path_advertises_generated_invalid_request(self):
         document = convert(self.ir)
