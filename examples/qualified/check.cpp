@@ -21,6 +21,11 @@ int main() {
     const auto left = rig_http::dispatch("GET", "/left", "");
     const auto literal = rig_http::dispatch("GET", "/left/new", "");
     const auto variable = rig_http::dispatch("GET", "/left/other", "");
+    const auto literal_with_query = rig_http::dispatch("GET", "/left/new?view=short", "");
+    const auto encoded_variable = rig_http::dispatch("GET", "/left/a%20b?view=short", "");
+    const auto encoded_slash = rig_http::dispatch("GET", "/left/a%2Fb", "");
+    const auto invalid_escape = rig_http::dispatch("GET", "/left/a%2", "");
+    const auto invalid_hex = rig_http::dispatch("GET", "/left/a%GG", "");
     const auto right = rig_http::dispatch("GET", "/right", "");
     const auto pair = rig_http::dispatch(
         "POST", "/pairs", R"({"left":{"value":7},"right":{"value":"seven"}})");
@@ -34,6 +39,16 @@ int main() {
     assert(left && left->status == 200 && left->body["value"] == 7);
     assert(literal && literal->status == 200 && literal->body["value"] == 99);
     assert(variable && variable->status == 200 && variable->body["value"] == 5);
+    assert(literal_with_query && literal_with_query->status == 200 &&
+           literal_with_query->body["value"] == 99);
+    assert(encoded_variable && encoded_variable->status == 200 &&
+           encoded_variable->body["value"] == 3);
+    assert(encoded_slash && encoded_slash->status == 200 &&
+           encoded_slash->body["value"] == 3);
+    assert(invalid_escape && invalid_escape->status == 400 &&
+           invalid_escape->body["code"] == "invalid_request");
+    assert(invalid_hex && invalid_hex->status == 400 &&
+           invalid_hex->body["code"] == "invalid_request");
     assert(right && right->status == 200 && right->body["value"] == "seven");
     assert(pair && pair->status == 200 && pair->body["left"]["value"] == 7 &&
            pair->body["right"]["value"] == "seven");

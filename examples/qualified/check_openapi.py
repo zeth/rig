@@ -20,6 +20,9 @@ assert schemas["Pair"]["properties"] == {
 assert document["paths"]["/left"]["get"]["operationId"] == "left.read"
 assert document["paths"]["/left/new"]["get"]["operationId"] == "newest"
 assert document["paths"]["/right"]["get"]["operationId"] == "right.read"
+assert document["paths"]["/left/{key}"]["get"]["responses"]["400"]["content"]["application/json"]["schema"] == {
+    "$ref": "#/components/schemas/RigInvalidRequest"
+}
 checked = document["paths"]["/checked"]["post"]["responses"]
 assert checked["400"]["content"]["application/json"]["schema"] == {
     "$ref": "#/components/schemas/RigInvalidRequest"

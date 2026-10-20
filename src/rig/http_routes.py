@@ -36,6 +36,7 @@ def generate(ir, codec_header):
         "#include <regex>",
         "#include <stdexcept>",
         "#include <string>",
+        "#include <string_view>",
         "#include <system_error>",
         "#include <type_traits>",
         "#include <utility>",
@@ -46,6 +47,31 @@ def generate(ir, codec_header):
         "struct response { int status; json body; };",
         "inline response invalid_request(const std::string& message) {",
         '    return {400, json{{"code", "invalid_request"}, {"message", message}}};',
+        "}",
+        "inline int hex_digit(char character) {",
+        "    if (character >= '0' && character <= '9') return character - '0';",
+        "    if (character >= 'a' && character <= 'f') return character - 'a' + 10;",
+        "    if (character >= 'A' && character <= 'F') return character - 'A' + 10;",
+        "    return -1;",
+        "}",
+        "inline std::string decode_path_string(std::string_view input) {",
+        "    std::string result;",
+        "    result.reserve(input.size());",
+        "    for (std::size_t index = 0; index < input.size(); ++index) {",
+        "        if (input[index] != '%') {",
+        "            result.push_back(input[index]);",
+        "            continue;",
+        "        }",
+        "        if (input.size() - index < 3)",
+        '            throw std::invalid_argument("invalid percent escape in path parameter");',
+        "        const int high = hex_digit(input[index + 1]);",
+        "        const int low = hex_digit(input[index + 2]);",
+        "        if (high < 0 || low < 0)",
+        '            throw std::invalid_argument("invalid percent escape in path parameter");',
+        "        result.push_back(static_cast<char>((high << 4) | low));",
+        "        index += 2;",
+        "    }",
+        "    return result;",
         "}",
         "inline int decode_path_int(const std::string& input) {",
         "    int value;",
@@ -64,6 +90,7 @@ def generate(ir, codec_header):
         "inline std::optional<response> dispatch(const std::string& method,",
         "                                    const std::string& path,",
         "                                    const std::string& body) {",
+        "    const auto route_path = path.substr(0, path.find('?'));",
         "    std::smatch match;",
     ]
 
@@ -79,7 +106,7 @@ def generate(ir, codec_header):
             raise ValueError(f"multiple body parameters in {name}")
         lines += [
             f"    static const std::regex route_{index}({json.dumps(pattern)});",
-            f'    if (method == "{operation["method"]}" && std::regex_match(path, match, route_{index})) {{',
+            f'    if (method == "{operation["method"]}" && std::regex_match(route_path, match, route_{index})) {{',
         ]
         arguments = []
         decodes = []
@@ -88,7 +115,8 @@ def generate(ir, codec_header):
             param_type = cpp_type(parameter["type"])
             if param_name in captures:
                 value = f"match[{captures[param_name]}].str()"
-                value = f"decode_path_int({value})" if param_type == "int" else value
+                value = (f"decode_path_int({value})" if param_type == "int"
+                         else f"decode_path_string({value})")
             else:
                 value = f"decode_body<{param_type}>(body)"
             lines.append(f"        std::optional<{param_type}> argument_{position};")

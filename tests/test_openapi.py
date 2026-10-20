@@ -40,6 +40,16 @@ class ConversionTests(unittest.TestCase):
             "$ref": "#/components/schemas/RigInvalidRequest",
         })
 
+    def test_string_path_advertises_invalid_percent_escape(self):
+        self.ir["operations"][0]["path"] = "/results/{key}"
+        self.ir["operations"][0]["parameters"] = [
+            {"name": "key", "type": {"kind": "builtin", "name": "string"}}
+        ]
+        response = convert(self.ir)["paths"]["/results/{key}"]["get"]["responses"]["400"]
+        self.assertEqual(response["content"]["application/json"]["schema"], {
+            "$ref": "#/components/schemas/RigInvalidRequest",
+        })
+
     def test_declared_400_and_generated_invalid_request_share_response(self):
         self.ir["operations"][0]["errors"] = [{
             "status": 400, "type": {"kind": "named", "name": "sample::Result"},

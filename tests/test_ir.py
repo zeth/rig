@@ -120,16 +120,16 @@ class IRValidationTests(unittest.TestCase):
         self.ir["operations"].append(literal)
         self.assertIs(validate(self.ir), self.ir)
         routes = http_routes(self.ir, "codec.hpp")
-        self.assertLess(routes.index('method == "GET" && std::regex_match(path, match, route_1)'),
-                        routes.index('method == "GET" && std::regex_match(path, match, route_0)'))
+        self.assertLess(routes.index('method == "GET" && std::regex_match(route_path, match, route_1)'),
+                        routes.index('method == "GET" && std::regex_match(route_path, match, route_0)'))
 
         variable["parameters"][0]["type"]["name"] = "int"
         self.assertIs(validate(self.ir), self.ir)
         literal["path"] = "/items/123"
         self.assertIs(validate(self.ir), self.ir)
         routes = http_routes(self.ir, "codec.hpp")
-        self.assertLess(routes.index('method == "GET" && std::regex_match(path, match, route_1)'),
-                        routes.index('method == "GET" && std::regex_match(path, match, route_0)'))
+        self.assertLess(routes.index('method == "GET" && std::regex_match(route_path, match, route_1)'),
+                        routes.index('method == "GET" && std::regex_match(route_path, match, route_0)'))
 
 
 if __name__ == "__main__":

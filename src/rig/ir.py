@@ -129,13 +129,7 @@ def route_priority(operation):
 
 def request_needs_decoding(operation):
     """Whether route input can fail conversion before calling the operation."""
-    parameters = {item["name"]: item for item in operation["parameters"]}
-    _, captures = route_pattern(operation["path"], parameters)
-    return any(
-        item["name"] not in captures or
-        item["type"] == {"kind": "builtin", "name": "int"}
-        for item in operation["parameters"]
-    )
+    return bool(operation["parameters"])
 
 
 def _segments_overlap(left, right):
