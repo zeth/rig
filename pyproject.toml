@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rig-interface-generator"
+version = "0.1.0"
+description = "Generate interfaces from C++ declarations using static reflection"
+requires-python = ">=3.11"
+
+[project.scripts]
+rig = "rig.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rig = ["include/rig/*.hpp"]

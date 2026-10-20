@@ -1,4 +1,4 @@
-#include <dodger/game.hpp>
+#include "game.hpp"
 
 #include <algorithm>
 #include <cstdlib>

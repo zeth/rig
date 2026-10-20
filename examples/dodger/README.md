@@ -37,7 +37,7 @@ the same movement speed and shove cooldown. Obstacles appear every five ticks;
 the game runs at about 30 ticks per second after each player submits an action.
 The most recent action remains in effect until that player sends another.
 
-From the repository root, run `make server`, then use either player endpoint:
+Install RIG, then from this directory run `make server`. Use either player endpoint:
 
 ```sh
 curl http://127.0.0.1:8765/games/1
@@ -61,7 +61,7 @@ Every tenth of a second, the bot reads the game state through generated Python
 models, compares left/stay/right against the next few obstacle positions, and
 sends its action over HTTP. It sees the same state and has the
 same movement and shove rules as the human client. After `make check` or
-`make play` generates the client, `build/client-venv/bin/python dodger/bot.py`
+`make play` generates the client, `build/client-venv/bin/python bot.py`
 can also connect to a separately running `make server` instance.
 
 The demo hosts one game (`id` 1). The HTTP listener is intentionally limited

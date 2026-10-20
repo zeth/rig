@@ -2,7 +2,7 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dodger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from bot import choose_action
 from dodger_api_client.models import GameState, Move

@@ -1,4 +1,4 @@
-#include <build/dodger_json.hpp>
+#include "build/dodger_json.hpp"
 
 #include <cassert>
 #include <stdexcept>

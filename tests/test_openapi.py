@@ -1,6 +1,6 @@
 import unittest
 
-from openapi import convert
+from rig.openapi import convert
 
 
 class ConversionTests(unittest.TestCase):

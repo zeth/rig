@@ -1,6 +1,7 @@
 """Prove a changed C++ annotation changes OpenAPI and the live route."""
 
 import json
+import shutil
 import socket
 import subprocess
 import sys
@@ -9,48 +10,52 @@ import time
 import urllib.request
 from pathlib import Path
 
-from embed_openapi import generate as embed_openapi
-from http_routes import generate
-from openapi import convert
 from test_server import request
 
 
 def main():
     root = Path(__file__).resolve().parents[1]
-    source = (root / "dodger" / "api.hpp").read_text()
+    compiler, rig = sys.argv[1:]
+    include_dir = subprocess.check_output([rig, "include-dir"], text=True).strip()
+    source = (root / "api.hpp").read_text()
     original = 'RIG_ROUTE(GET, "/games/{id}")'
     changed = 'RIG_ROUTE(GET, "/matches/{id}")'
     assert source.count(original) == 1
 
     with tempfile.TemporaryDirectory(prefix="route-change-", dir=root / "build") as directory:
         temporary = Path(directory)
-        (temporary / "dodger").mkdir()
         (temporary / "build").mkdir()
-        (temporary / "dodger" / "api.hpp").write_text(source.replace(original, changed))
+        (temporary / "api.hpp").write_text(source.replace(original, changed))
+        for name in ("inspect.cpp", "game.hpp", "game.cpp", "server.cpp"):
+            shutil.copyfile(root / name, temporary / name)
+        shutil.copyfile(root / "build" / "dodger_json.hpp", temporary / "build" / "dodger_json.hpp")
 
         inspector = temporary / "inspect"
         subprocess.run([
-            sys.argv[1], "-std=c++26", "-freflection", "-DRIG_GENERATING",
-            f"-I{temporary}", "-Iinclude", "-I.", "dodger/inspect.cpp", "-o", str(inspector),
-        ], cwd=root, check=True)
+            compiler, "-std=c++26", "-freflection", "-DRIG_GENERATING",
+            f"-I{include_dir}", "inspect.cpp", "-o", str(inspector),
+        ], cwd=temporary, check=True)
         ir = json.loads(subprocess.check_output([inspector], cwd=root))
-        document = convert(ir, title="Dodger API")
+        openapi_json = subprocess.check_output(
+            [rig, "openapi", "--title", "Dodger API"], input=json.dumps(ir), text=True
+        )
+        document = json.loads(openapi_json)
         paths = document["paths"]
         assert "/matches/{id}" in paths
         assert "/games/{id}" not in paths
 
-        (temporary / "build" / "dodger_routes.hpp").write_text(
-            generate(ir, "dodger", "build/dodger_json.hpp")
-        )
-        openapi_json = json.dumps(document, indent=2) + "\n"
-        (temporary / "build" / "dodger_openapi.hpp").write_text(
-            embed_openapi(openapi_json.encode())
-        )
+        (temporary / "build" / "dodger_routes.hpp").write_text(subprocess.check_output(
+            [rig, "http-routes", "--namespace", "dodger", "--codec-header", "build/dodger_json.hpp"],
+            input=json.dumps(ir), text=True,
+        ))
+        (temporary / "build" / "dodger_openapi.hpp").write_text(subprocess.check_output(
+            [rig, "embed-openapi"], input=openapi_json, text=True,
+        ))
         server_path = temporary / "server"
         subprocess.run([
-            sys.argv[1], "-std=c++20", f"-I{temporary}", "-Iinclude", "-I.",
-            "dodger/game.cpp", "dodger/server.cpp", "-o", str(server_path),
-        ], cwd=root, check=True)
+            compiler, "-std=c++20", f"-I{include_dir}", "-I.",
+            "game.cpp", "server.cpp", "-o", str(server_path),
+        ], cwd=temporary, check=True)
 
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))

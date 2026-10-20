@@ -133,7 +133,7 @@ def main():
             validate(action, operation["requestBody"]["content"]["application/json"]["schema"], components)
             validate(state, operation["responses"]["200"]["content"]["application/json"]["schema"], components)
         assert state["status"] == "Running"
-        bot_script = Path(__file__).resolve().parents[1] / "dodger" / "bot.py"
+        bot_script = Path(__file__).resolve().parents[1] / "bot.py"
         subprocess.run(
             [sys.executable, str(bot_script), "--url", base,
              "--interval", "0.02", "--max-actions", "5"],

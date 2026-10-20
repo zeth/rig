@@ -6,8 +6,8 @@ import json
 import re
 import sys
 
-from json_codec import identifier
-from openapi import convert
+from .json_codec import identifier
+from .openapi import convert
 
 
 PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z_0-9]*)\}\Z")

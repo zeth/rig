@@ -63,10 +63,10 @@ RIG uses modern compiler reflection to inspect ordinary C++20 code, extract its 
               ┌───────┴────────┐
               │                │
               ▼                ▼
-       OpenAPI generator   C API generator
+       OpenAPI generator   future generators
               │                │
               ▼                ▼
-         openapi.yaml     C headers/wrappers
+         openapi.json
               │
               ▼
        Existing tools such as
@@ -79,7 +79,7 @@ RIG uses modern compiler reflection to inspect ordinary C++20 code, extract its 
 - **Minimal annotations:** Developers provide only metadata that reflection cannot infer, such as HTTP methods and routes.
 - **Modern tooling, portable output:** GCC 16 and C++26 are required for reflection, not for compiling the original application or consuming generated interfaces.
 - **Neutral intermediate representation:** Reflection extracts information into a common IR, independent of any output format.
-- **Extensible generation:** OpenAPI is the initial target, with C APIs and other interfaces supported through separate generators.
+- **Extensible generation:** OpenAPI is the initial target; other interfaces could use separate generators.
 - **Deterministic output:** Generated interfaces are reproducible, testable and suitable for version control and CI validation.
 
 ### Intended developer experience
@@ -93,37 +93,37 @@ RIG_ROUTE(POST, "/items")
 Item create_item(CreateItemRequest request);
 ```
 
-The annotation macros are implemented in `include/rig/route.hpp` and disappear in
+The annotation macros are implemented in `src/rig/include/rig/route.hpp` and disappear in
 ordinary C++20 builds.
 
 Developers continue writing ordinary C++20. RIG uses C++26 reflection at generation time to discover the annotated operations, extract their types and semantics, and produce an OpenAPI specification.
 
 **The compiler understands the C++. RIG understands the interfaces. Existing tools consume the output.**
 
-### Current prototype
+### Project layout
 
-The repository now contains a deliberately narrow working slice. From this
-directory, run `make generate` to regenerate Dodger and the independent
-catalog example; run `make check` to verify both C++20 headers, conversion
-rules, generated-file drift, and an independently generated Python client.
-GCC 16 with `-freflection` and Python 3.11 or later are required for the full
-check. The client check creates an ignored virtual environment and installs
-the pinned tools in `requirements-client.txt`. Ordinary consumers compile
-their API headers as C++20 without reflection.
+RIG is an installable Python command line tool with its C++ headers bundled
+in the package. `src/rig/include/rig/route.hpp` supplies C++20 annotations;
+`inspect.hpp` is the C++26 reflection writer. `src/rig/*.py` validates and
+transforms the reflected IR. `tests/` contains RIG tests. Each directory in
+`examples/` has its own build and checks and uses only the installed `rig`
+command and headers. Dodger is a complete example app; Catalog is a small
+contract example.
 
-`include/rig/inspect.hpp` is the reusable C++26 reflection writer. Dodger's
-`dodger/inspect.cpp` nominates its namespace once; RIG discovers its
-`RIG_ROUTE` functions and the record and enum types reachable from their
-signatures. `examples/catalog/inspect.cpp` still demonstrates explicit
-registration. The writer extracts route annotations, parameters, return
-types, typed error responses, record fields, and enum values into RIG IR JSON.
-`tools/openapi.py` converts that IR to OpenAPI 3.1 JSON with Python's standard
-library. `tools/json_codec.py` also generates a C++20 JSON codec header from
-the same IR for Dodger's server. `tools/http_routes.py` generates its C++20
-method and path dispatch, argument decoding, and operation calls. The catalog
-example has no dependency on Dodger and exercises the same pipeline with a
-different API. This split remains an experiment; the examples do not yet
-establish whether the final OpenAPI generator belongs in Python or C++.
+Install locally with `python3 -m pip install .`, then run `rig --help` and
+`rig include-dir` to find the installed C++ headers. To check this checkout,
+run `make check`; it creates an editable local installation under `build/venv`,
+runs RIG's tests, and invokes each example's own `check` target. GCC 16 with
+`-freflection` and Python 3.11 or later are required. Dodger's check installs
+its pinned client tools in its own ignored virtual environment.
+
+The reflection writer extracts route annotations, parameters, return types,
+typed error responses, record fields, and enum values into versioned RIG IR
+JSON. `rig openapi` emits OpenAPI 3.1 JSON; `rig json-codec` emits C++20
+`nlohmann::json` codecs; `rig http-routes` emits C++20 dispatch; and
+`rig embed-openapi` emits a header containing the exact OpenAPI bytes. Each
+generator reads IR (or OpenAPI bytes for `embed-openapi`) on standard input
+and writes its result on standard output.
 
 Current conventions are intentionally small: a parameter named in the route
 is a path parameter; one remaining parameter becomes a JSON request body;
@@ -147,7 +147,7 @@ selected functions with `RIG_ROUTE`, and nominate the containing namespace in
 a C++26 entry point:
 
 ```cpp
-#include <examples/catalog/api.hpp>
+#include "api.hpp"
 #include <rig/inspect.hpp>
 #include <iostream>
 
@@ -157,33 +157,16 @@ output.finish();
 ```
 
 Compile that registration file with `-std=c++26 -freflection -DRIG_GENERATING`
-and the RIG include directory, then pipe its JSON output to
-`python3 tools/openapi.py --title 'Catalog API'`. Namespace discovery sees
+and the directory printed by `rig include-dir`, then pipe its JSON output to
+`rig openapi --title 'Catalog API'`. Namespace discovery sees
 directly declared functions with a route annotation and follows their
 referenced record and enum types. Unsupported references fail during OpenAPI
 conversion. `rig::writer` also retains explicit `add_type` and
 `add_operation` calls for cases where a namespace root is unsuitable.
 
-Dodger now supplies a C++20 game engine and a localhost HTTP server for the
-generated routes. The server uses `nlohmann_json` for JSON and POSIX sockets;
-on Fedora, install `json-devel` if its header is unavailable. Run
-`make server` to listen on `127.0.0.1:8765`. `make check` also exercises the
-server over HTTP and checks its success and error responses against the generated
-schemas.
-
-Run `make play` in a terminal to launch the server, a Python bot that uses
-the client generated from Dodger's OpenAPI document, and a terminal client for
-the human player. The generated client is kept under the ignored `build/`
-directory. See `dodger/README.md` for controls and standalone commands.
-
-Dodger's HTTP server uses generated C++20 code for its JSON format and route
-dispatch. Socket handling, HTTP framing, and exception-to-status mapping
-remain in the server. It serves the generated document at `GET /openapi.json`
-from bytes embedded in the binary, so the endpoint works independently of the
-server's working directory. `make check` tests codec round trips, invalid
-actions, and live responses against the generated OpenAPI schemas. It also
-changes a route annotation in a temporary header and verifies that both
-OpenAPI and a separately built live server follow the new path.
-An external OpenAPI validator checks the document before client generation;
-the live check calls all three Dodger operations through that client and checks
-that `/openapi.json` returns the generated file byte for byte.
+In `examples/dodger`, run `make server` or `make play` after installing RIG.
+Its C++20 server uses the generated codec and dispatch, and serves the generated
+document from embedded bytes. Dodger's own `make check` validates the document,
+generates a Python client, checks live HTTP responses, and proves that changing
+an annotation changes both the document and a rebuilt server. See
+`examples/dodger/README.md` for controls and commands.

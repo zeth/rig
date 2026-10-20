@@ -37,7 +37,7 @@ def main():
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
     base_url = f"http://127.0.0.1:{port}"
-    server_path = Path(__file__).resolve().parents[1] / "build" / "dodger-server"
+    server_path = Path(__file__).resolve().parent / "build" / "dodger-server"
     server = subprocess.Popen([str(server_path), str(port)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                               text=True)
