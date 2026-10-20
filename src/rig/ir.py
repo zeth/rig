@@ -1,10 +1,10 @@
-"""Validation and shared route rules for RIG IR version 9."""
+"""Validation and shared route rules for RIG IR version 10."""
 
 import re
 from collections import Counter
 
 
-VERSION = 9
+VERSION = 10
 BUILTINS = {"int", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -129,7 +129,7 @@ def route_priority(operation):
 
 def request_needs_decoding(operation):
     """Whether route input can fail conversion before calling the operation."""
-    return bool(operation["parameters"])
+    return bool(operation["parameters"]) and not operation.get("context_parameters")
 
 
 def query_value_type(ref):
@@ -208,13 +208,21 @@ def validate(document):
         for member_index, member in enumerate(members):
             member_location = f"{location}.{member_key}[{member_index}]"
             if kind == "record":
-                member = _object(member, member_location, ("name", "type"), ("bool_value",))
+                member = _object(member, member_location, ("name", "type"),
+                                 ("bool_value", "description", "minimum"))
                 member_name = _name(member["name"], f"{member_location}.name")
                 if "bool_value" in member:
                     if type(member["bool_value"]) is not bool or member["type"] != {
                         "kind": "builtin", "name": "bool"
                     }:
                         raise ValueError(f"{member_location}.bool_value: requires a bool field")
+                if "description" in member and not isinstance(member["description"], str):
+                    raise ValueError(f"{member_location}.description: expected string")
+                if "minimum" in member:
+                    if type(member["minimum"]) is not int or member["type"] != {
+                        "kind": "builtin", "name": "int"
+                    }:
+                        raise ValueError(f"{member_location}.minimum: requires an int field")
                 label = "field"
             else:
                 member_name = _name(member, member_location)
@@ -252,7 +260,7 @@ def validate(document):
         operation = _object(
             operation, location,
             ("name", "cpp_name", "method", "path", "parameters", "returns"),
-            ("errors", "summary", "description", "response_description"),
+            ("errors", "summary", "description", "response_description", "context_parameters"),
         )
         for key in ("summary", "description", "response_description"):
             if key in operation and (not isinstance(operation[key], str) or not operation[key]):
@@ -266,6 +274,13 @@ def validate(document):
         if not isinstance(method, str) or method not in METHODS:
             raise ValueError(f"{location}.method: unsupported HTTP method: {method!r}")
         parameters = _array(operation["parameters"], f"{location}.parameters")
+        context_parameters = _array(operation.get("context_parameters", []),
+                                    f"{location}.context_parameters")
+        context_names = set()
+        for context_index, context_name in enumerate(context_parameters):
+            context_name = _name(context_name,
+                                 f"{location}.context_parameters[{context_index}]")
+            _unique(context_names, context_name, location, "context parameter")
         parameter_names = set()
         by_name = {}
         for parameter_index, parameter in enumerate(parameters):
@@ -273,6 +288,8 @@ def validate(document):
             parameter = _object(parameter, parameter_location, ("name", "type"), ("in", "range"))
             parameter_name = _name(parameter["name"], f"{parameter_location}.name")
             _unique(parameter_names, parameter_name, parameter_location, "parameter")
+            if parameter_name in context_names:
+                raise ValueError(f"{parameter_location}: also a context parameter")
             type_ref(parameter["type"], f"{parameter_location}.type")
             if "range" in parameter:
                 bounds = _object(parameter["range"], f"{parameter_location}.range",

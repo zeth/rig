@@ -58,6 +58,9 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 property_schema = schema(field["type"])
                 if "bool_value" in field:
                     property_schema["enum"] = [field["bool_value"]]
+                for key in ("description", "minimum"):
+                    if key in field:
+                        property_schema[key] = field[key]
                 properties[field["name"]] = property_schema
             record_schema = {
                 "type": "object",

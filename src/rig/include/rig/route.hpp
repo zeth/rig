@@ -10,7 +10,10 @@ struct route {
     char path[128];
 };
 struct query {};
+struct context {};
 struct range { int minimum; int maximum; };
+struct minimum { int value; };
+struct field_description { char text[256]; };
 struct summary { char text[256]; };
 struct description { char text[2048]; };
 struct response_description { char text[256]; };
@@ -27,7 +30,10 @@ struct error_response {
 }
 #define RIG_ROUTE(method, path) [[=::rig::route{#method, path}]]
 #define RIG_QUERY [[=::rig::query{}]]
+#define RIG_CONTEXT [[=::rig::context{}]]
 #define RIG_RANGE(minimum, maximum) [[=::rig::range{minimum, maximum}]]
+#define RIG_MINIMUM(value) [[=::rig::minimum{value}]]
+#define RIG_FIELD_DESCRIPTION(text) [[=::rig::field_description{text}]]
 #define RIG_SUMMARY(text) [[=::rig::summary{text}]]
 #define RIG_DESCRIPTION(text) [[=::rig::description{text}]]
 #define RIG_RESPONSE_DESCRIPTION(text) [[=::rig::response_description{text}]]
@@ -41,7 +47,10 @@ struct error_response {
 #else
 #define RIG_ROUTE(method, path)
 #define RIG_QUERY
+#define RIG_CONTEXT
 #define RIG_RANGE(minimum, maximum)
+#define RIG_MINIMUM(value)
+#define RIG_FIELD_DESCRIPTION(text)
 #define RIG_SUMMARY(text)
 #define RIG_DESCRIPTION(text)
 #define RIG_RESPONSE_DESCRIPTION(text)

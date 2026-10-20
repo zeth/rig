@@ -85,6 +85,7 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
         if (!has_route(member)) continue;
         collect_type(std::meta::return_type_of(member), types);
         for (auto parameter : std::meta::parameters_of(member)) {
+            if (!std::meta::annotations_of_with_type(parameter, ^^rig::context).empty()) continue;
             collect_type(std::meta::type_of(parameter), types);
         }
         for (auto annotation : std::meta::annotations_of_with_type(
@@ -244,6 +245,23 @@ void emit_record(std::ostream& output) {
             constexpr auto value = [:std::meta::constant_of(bool_values[0]):];
             output << ",\"bool_value\":" << (value.value ? "true" : "false");
         }
+        constexpr auto descriptions = std::define_static_array(
+            std::meta::annotations_of_with_type(field, ^^rig::field_description));
+        static_assert(descriptions.size() <= 1, "RIG fields need at most one description");
+        if constexpr (descriptions.size() == 1) {
+            constexpr auto value = [:std::meta::constant_of(descriptions[0]):];
+            output << ",\"description\":";
+            quoted(output, value.text);
+        }
+        constexpr auto minimums = std::define_static_array(
+            std::meta::annotations_of_with_type(field, ^^rig::minimum));
+        static_assert(minimums.size() <= 1, "RIG fields need at most one minimum");
+        if constexpr (minimums.size() == 1) {
+            static_assert(std::meta::is_same_type(std::meta::type_of(field), ^^int),
+                          "RIG_MINIMUM requires an int field");
+            constexpr auto value = [:std::meta::constant_of(minimums[0]):];
+            output << ",\"minimum\":" << value.value;
+        }
         output << '}';
     }
     output << "]}";
@@ -380,25 +398,44 @@ void emit_operation(std::ostream& output) {
     bool first = true;
     template for (constexpr auto parameter : std::define_static_array(
         std::meta::parameters_of(Function))) {
-        if (!first) output << ',';
-        first = false;
-        output << "{\"name\":";
-        quoted(output, std::meta::identifier_of(parameter));
-        output << ",\"type\":";
-        emit_type<std::meta::type_of(parameter)>(output);
+        constexpr auto contexts = std::define_static_array(
+            std::meta::annotations_of_with_type(parameter, ^^rig::context));
+        static_assert(contexts.size() <= 1, "RIG parameters need at most one context annotation");
         constexpr auto queries = std::define_static_array(
             std::meta::annotations_of_with_type(parameter, ^^rig::query));
-        static_assert(queries.size() <= 1, "RIG parameters need at most one query annotation");
-        if constexpr (queries.size() == 1) output << ",\"in\":\"query\"";
-        constexpr auto ranges = std::define_static_array(
-            std::meta::annotations_of_with_type(parameter, ^^rig::range));
-        static_assert(ranges.size() <= 1, "RIG parameters need at most one range annotation");
-        if constexpr (ranges.size() == 1) {
-            constexpr auto bounds = [:std::meta::constant_of(ranges[0]):];
-            output << ",\"range\":{\"minimum\":" << bounds.minimum
-                   << ",\"maximum\":" << bounds.maximum << '}';
+        static_assert(contexts.size() == 0 || queries.size() == 0,
+                      "RIG context parameters cannot also be query parameters");
+        if constexpr (contexts.size() == 0) {
+            if (!first) output << ',';
+            first = false;
+            output << "{\"name\":";
+            quoted(output, std::meta::identifier_of(parameter));
+            output << ",\"type\":";
+            emit_type<std::meta::type_of(parameter)>(output);
+            static_assert(queries.size() <= 1, "RIG parameters need at most one query annotation");
+            if constexpr (queries.size() == 1) output << ",\"in\":\"query\"";
+            constexpr auto ranges = std::define_static_array(
+                std::meta::annotations_of_with_type(parameter, ^^rig::range));
+            static_assert(ranges.size() <= 1, "RIG parameters need at most one range annotation");
+            if constexpr (ranges.size() == 1) {
+                constexpr auto bounds = [:std::meta::constant_of(ranges[0]):];
+                output << ",\"range\":{\"minimum\":" << bounds.minimum
+                       << ",\"maximum\":" << bounds.maximum << '}';
+            }
+            output << '}';
         }
-        output << '}';
+    }
+    output << "],\"context_parameters\":[";
+    first = true;
+    template for (constexpr auto parameter : std::define_static_array(
+        std::meta::parameters_of(Function))) {
+        constexpr auto contexts = std::define_static_array(
+            std::meta::annotations_of_with_type(parameter, ^^rig::context));
+        if constexpr (contexts.size() == 1) {
+            if (!first) output << ',';
+            first = false;
+            quoted(output, std::meta::identifier_of(parameter));
+        }
     }
     output << "],\"returns\":";
     constexpr auto return_type = std::meta::remove_cvref(std::meta::return_type_of(Function));
@@ -410,8 +447,8 @@ void emit_operation(std::ostream& output) {
         emit_type<return_type>(output);
     }
     output << ",\"errors\":[";
+    first = true;
     if constexpr (is_result_type(return_type)) {
-        first = true;
         template for (constexpr auto error : std::define_static_array(result_errors(return_type))) {
             if (!first) output << ',';
             first = false;
@@ -441,7 +478,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":9,\"types\":[";
+        output_ << "{\"ir_version\":10,\"types\":[";
     }
 
     template <std::meta::info Type>

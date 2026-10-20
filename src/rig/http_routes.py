@@ -8,6 +8,8 @@ from .ir import identifier, query_value_type, route_pattern, route_priority, val
 
 def generate(ir, codec_header):
     validate(ir)
+    if any(operation.get("context_parameters") for operation in ir["operations"]):
+        raise ValueError("HTTP route generation cannot supply context parameters")
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", codec_header):
         raise ValueError("invalid codec header path")
 

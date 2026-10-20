@@ -23,8 +23,9 @@ class InspectorTests(unittest.TestCase):
             header.write_text(
                 '#include <rig/route.hpp>\n'
                 'namespace sample {\n'
-                'struct Item { int value; };\n'
-                'RIG_ROUTE(GET, "/items/{id}") Item get_item(int id);\n'
+                'struct Context;\n'
+                'struct Item { int value RIG_MINIMUM(1) RIG_FIELD_DESCRIPTION("Count"); };\n'
+                'RIG_ROUTE(GET, "/items/{id}") Item get_item(Context& context RIG_CONTEXT, int id);\n'
                 'RIG_ROUTE(GET, "/items") Item list_items(int limit RIG_QUERY RIG_RANGE(1, 20));\n'
                 '}\n'
             )
@@ -38,12 +39,16 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 9)
+            self.assertEqual(ir["ir_version"], 10)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
+            self.assertEqual(ir["operations"][0]["context_parameters"], ["context"])
+            self.assertEqual([p["name"] for p in ir["operations"][0]["parameters"]], ["id"])
             self.assertEqual(ir["operations"][1]["parameters"][0]["in"], "query")
             self.assertEqual(ir["operations"][1]["parameters"][0]["range"],
                              {"minimum": 1, "maximum": 20})
             self.assertEqual(ir["types"][0]["fields"][0]["name"], "value")
+            self.assertEqual(ir["types"][0]["fields"][0]["minimum"], 1)
+            self.assertEqual(ir["types"][0]["fields"][0]["description"], "Count")
             generated = self.run_inspect(
                 root, "--header", "sample/api.hpp", "--namespace", "sample",
                 "--", "-Iinclude",

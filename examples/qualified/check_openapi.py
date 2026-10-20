@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 ir = json.loads(Path("build/rig.json").read_text())
-assert ir["ir_version"] == 9
+assert ir["ir_version"] == 10
 assert {entry["cpp_name"] for entry in ir["types"]} == {
     "left::Result", "right::Result", "service::Pair"
 }

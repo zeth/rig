@@ -1,12 +1,13 @@
 import unittest
 
+from rig.http_routes import generate as generate_routes
 from rig.openapi import convert
 
 
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 9,
+            "ir_version": 10,
             "types": [{
                 "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
@@ -43,6 +44,25 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(operation["summary"], "Leaving")
         self.assertEqual(operation["description"], "A hint to the server.")
         self.assertEqual(operation["responses"]["200"]["description"], "Acknowledged")
+
+    def test_field_description_and_minimum(self):
+        self.ir["types"][0]["fields"].append({
+            "name": "count", "type": {"kind": "builtin", "name": "int"},
+            "minimum": 1, "description": "Live items.",
+        })
+        self.assertEqual(
+            convert(self.ir)["components"]["schemas"]["Result"]["properties"]["count"],
+            {"type": "integer", "minimum": 1, "description": "Live items."},
+        )
+
+    def test_external_context_is_not_an_http_parameter_or_generated_400(self):
+        self.ir["operations"][0]["context_parameters"] = ["database"]
+        document = convert(self.ir)
+        operation = document["paths"]["/results/{id}"]["get"]
+        self.assertEqual([item["name"] for item in operation["parameters"]], ["id"])
+        self.assertNotIn("400", operation["responses"])
+        with self.assertRaisesRegex(ValueError, "cannot supply context parameters"):
+            generate_routes(self.ir, "codec.hpp")
 
     def test_open_record_and_omitted_operation_id(self):
         self.ir["types"][0]["open"] = True
