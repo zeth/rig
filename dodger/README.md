@@ -24,6 +24,8 @@ Something instead of the same boring examples.
 simulation, and `server.cpp` serves the declared routes on localhost.
 `inspect.cpp` nominates the `dodger` namespace; RIG discovers the annotated
 operations and their reachable types without a separate declaration list.
+The routes declare a shared `ErrorResponse` type and their 400, 404, and 409
+responses with `RIG_ERROR`; these appear in the generated OpenAPI document.
 
 The sample contract now has left/stay/right actions, player lives and shove
 cooldowns, falling obstacles, and a waiting/running/finished game status. A

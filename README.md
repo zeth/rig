@@ -86,13 +86,14 @@ RIG uses modern compiler reflection to inspect ordinary C++20 code, extract its 
 
 ```cpp
 RIG_ROUTE(GET, "/items/{id}")
+RIG_ERROR(404, ErrorResponse)
 Item get_item(ItemId id);
 
 RIG_ROUTE(POST, "/items")
 Item create_item(CreateItemRequest request);
 ```
 
-The route macro is implemented in `include/rig/route.hpp` and disappears in
+The annotation macros are implemented in `include/rig/route.hpp` and disappear in
 ordinary C++20 builds.
 
 Developers continue writing ordinary C++20. RIG uses C++26 reflection at generation time to discover the annotated operations, extract their types and semantics, and produce an OpenAPI specification.
@@ -113,7 +114,7 @@ C++20 without reflection.
 `RIG_ROUTE` functions and the record and enum types reachable from their
 signatures. `examples/catalog/inspect.cpp` still demonstrates explicit
 registration. The writer extracts route annotations, parameters, return
-types, record fields, and enum values into RIG IR JSON.
+types, typed error responses, record fields, and enum values into RIG IR JSON.
 `tools/openapi.py` converts that IR to OpenAPI 3.1 JSON with Python's standard
 library. The catalog example has no dependency on Dodger and exercises the
 same pipeline with a different API. This split remains an experiment; the
@@ -122,14 +123,17 @@ Python or C++.
 
 Current conventions are intentionally small: a parameter named in the route
 is a path parameter; one remaining parameter becomes a JSON request body;
-registered record fields are required; and a successful operation returns
-HTTP 200 with a JSON body. The IR currently describes `int`, `bool`,
+registered record fields are required; a successful operation returns
+HTTP 200 with a JSON body; and `RIG_ERROR(status, Body)` declares an operation's
+JSON error response. The IR currently describes `int`, `bool`,
 `std::string`, registered records and enums, `std::vector<T>`, and
 `std::optional<T>`. Enums become JSON strings matching their C++ enumerator
 names. An optional field is always present and contains either a value or
 `null`. Unsupported types and ambiguous inputs fail loudly.
 Type names currently use their unqualified C++ identifier, so registering two
 types with the same short name is rejected by the OpenAPI converter.
+Server-level HTTP errors such as malformed headers and unexpected failures
+are outside these per-operation declarations.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
 selected functions with `RIG_ROUTE`, and nominate the containing namespace in
@@ -157,7 +161,7 @@ Dodger now supplies a C++20 game engine and a localhost HTTP server for the
 generated routes. The server uses `nlohmann_json` for JSON and POSIX sockets;
 on Fedora, install `json-devel` if its header is unavailable. Run
 `make server` to listen on `127.0.0.1:8765`. `make check` also exercises the
-server over HTTP and checks its success responses against the generated
+server over HTTP and checks its success and error responses against the generated
 schemas.
 
 Run `make play` in a terminal to launch the server, a Python bot that uses

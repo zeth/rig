@@ -2,6 +2,7 @@
 
 #include <rig/route.hpp>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace dodger {
@@ -39,13 +40,24 @@ struct GameState {
     std::optional<Winner> winner;
 };
 
+struct ErrorResponse {
+    std::string error;
+};
+
 RIG_ROUTE(GET, "/games/{id}")
+RIG_ERROR(404, ErrorResponse)
 GameState get_game(int id);
 
 RIG_ROUTE(POST, "/games/{id}/players/2/actions")
+RIG_ERROR(400, ErrorResponse)
+RIG_ERROR(404, ErrorResponse)
+RIG_ERROR(409, ErrorResponse)
 GameState submit_action(int id, Action action);
 
 RIG_ROUTE(POST, "/games/{id}/players/1/actions")
+RIG_ERROR(400, ErrorResponse)
+RIG_ERROR(404, ErrorResponse)
+RIG_ERROR(409, ErrorResponse)
 GameState submit_human_action(int id, Action action);
 
 }

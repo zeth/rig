@@ -112,8 +112,21 @@ def main():
         status, state = request(base + "/games/1")
         assert status == 200 and state["tick"] > 0
         validate(state, get_schema, components)
-        assert request(base + "/games/2")[0] == 404
-        assert request(base + bot_path, "POST", {"move": "Jump", "shove": False})[0] == 400
+        def check_error(url, method, body, schema_path, expected_status):
+            status, response = request(url, method, body)
+            assert status == expected_status
+            schema = spec["paths"][schema_path][method.lower()]["responses"][str(status)]
+            validate(response, schema["content"]["application/json"]["schema"], components)
+            assert response["error"]
+
+        check_error(base + "/games/2", "GET", None, "/games/{id}", 404)
+        check_error(base + bot_path, "POST", {"move": "Jump", "shove": False},
+                    "/games/{id}/players/2/actions", 400)
+        check_error(base + "/games/2/players/1/actions", "POST", action,
+                    "/games/{id}/players/1/actions", 404)
+        for player in (1, 2):
+            path = f"/games/{{id}}/players/{player}/actions"
+            assert "409" in spec["paths"][path]["post"]["responses"]
         print("live Dodger HTTP contract: OK")
     finally:
         server.terminate()

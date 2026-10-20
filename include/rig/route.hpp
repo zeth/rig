@@ -8,8 +8,14 @@ struct route {
     char method[8];
     char path[128];
 };
+template <typename Body>
+struct error_response {
+    int status;
+};
 }
 #define RIG_ROUTE(method, path) [[=::rig::route{#method, path}]]
+#define RIG_ERROR(status, body) [[=::rig::error_response<body>{status}]]
 #else
 #define RIG_ROUTE(method, path)
+#define RIG_ERROR(status, body)
 #endif

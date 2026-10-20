@@ -22,6 +22,12 @@ consteval bool has_route(std::meta::info member) {
         !std::meta::annotations_of_with_type(member, ^^rig::route).empty();
 }
 
+consteval bool is_error_annotation(std::meta::info annotation) {
+    const auto type = std::meta::type_of(std::meta::constant_of(annotation));
+    return std::meta::has_template_arguments(type) &&
+        std::meta::template_of(type) == ^^rig::error_response;
+}
+
 consteval bool contains_type(const std::vector<std::meta::info>& types,
                              std::meta::info type) {
     for (auto existing : types) {
@@ -63,6 +69,12 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
         collect_type(std::meta::return_type_of(member), types);
         for (auto parameter : std::meta::parameters_of(member)) {
             collect_type(std::meta::type_of(parameter), types);
+        }
+        for (auto annotation : std::meta::annotations_of(member)) {
+            if (is_error_annotation(annotation)) {
+                const auto type = std::meta::type_of(std::meta::constant_of(annotation));
+                collect_type(std::meta::template_arguments_of(type)[0], types);
+            }
         }
     }
     // Keep direct namespace types in source order so adding a route does not
@@ -196,6 +208,22 @@ void emit_operation(std::ostream& output) {
     }
     output << "],\"returns\":";
     emit_type<std::meta::return_type_of(Function)>(output);
+    output << ",\"errors\":[";
+    first = true;
+    template for (constexpr auto annotation : std::define_static_array(
+        std::meta::annotations_of(Function))) {
+        if constexpr (is_error_annotation(annotation)) {
+            constexpr auto error = [:std::meta::constant_of(annotation):];
+            constexpr auto annotation_type = std::meta::type_of(std::meta::constant_of(annotation));
+            constexpr auto body = std::meta::template_arguments_of(annotation_type)[0];
+            if (!first) output << ',';
+            first = false;
+            output << "{\"status\":" << error.status << ",\"type\":";
+            emit_type<body>(output);
+            output << '}';
+        }
+    }
+    output << ']';
     output << '}';
 }
 

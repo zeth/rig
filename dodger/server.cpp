@@ -75,6 +75,10 @@ json encode(const dodger::GameState& state) {
     };
 }
 
+json encode(const dodger::ErrorResponse& response) {
+    return {{"error", response.error}};
+}
+
 dodger::Action decode_action(const std::string& body) {
     json value;
     try {
@@ -196,10 +200,10 @@ void handle_client(int client) {
     try {
         send_response(client, 200, dispatch(read_request(client)));
     } catch (const HttpError& error) {
-        send_response(client, error.status, {{"error", error.what()}});
+        send_response(client, error.status, encode(dodger::ErrorResponse{error.what()}));
     } catch (const std::exception& error) {
         std::cerr << "request failed: " << error.what() << '\n';
-        send_response(client, 500, {{"error", "internal server error"}});
+        send_response(client, 500, encode(dodger::ErrorResponse{"internal server error"}));
     }
 }
 

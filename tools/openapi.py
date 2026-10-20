@@ -96,6 +96,17 @@ def convert(ir, title="API", version="0.1.0"):
                 }
             },
         }
+        for error in operation.get("errors", []):
+            status = error["status"]
+            if type(status) is not int or not 400 <= status <= 599:
+                raise ValueError(f"invalid error status in {operation['name']}: {status}")
+            key = str(status)
+            if key in result["responses"]:
+                raise ValueError(f"duplicate response status in {operation['name']}: {status}")
+            result["responses"][key] = {
+                "description": "Error",
+                "content": {"application/json": {"schema": schema(error["type"])}}
+            }
         if parameters:
             result["parameters"] = parameters
         if bodies:

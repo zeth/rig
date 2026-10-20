@@ -42,6 +42,36 @@ class ConversionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unregistered type"):
             convert(self.ir)
 
+    def test_typed_error_response(self):
+        self.ir["types"].append({
+            "kind": "record", "name": "ErrorResponse", "fields": [
+                {"name": "error", "type": {"kind": "builtin", "name": "string"}}
+            ]
+        })
+        self.ir["operations"][0]["errors"] = [
+            {"status": 404, "type": {"kind": "named", "name": "ErrorResponse"}}
+        ]
+        responses = convert(self.ir)["paths"]["/results/{id}"]["get"]["responses"]
+        self.assertEqual(
+            responses["404"]["content"]["application/json"]["schema"],
+            {"$ref": "#/components/schemas/ErrorResponse"},
+        )
+
+    def test_invalid_error_status_is_rejected(self):
+        self.ir["operations"][0]["errors"] = [
+            {"status": 200, "type": {"kind": "named", "name": "Result"}}
+        ]
+        with self.assertRaisesRegex(ValueError, "invalid error status"):
+            convert(self.ir)
+
+    def test_duplicate_error_status_is_rejected(self):
+        self.ir["operations"][0]["errors"] = [
+            {"status": 404, "type": {"kind": "named", "name": "Result"}},
+            {"status": 404, "type": {"kind": "named", "name": "Result"}},
+        ]
+        with self.assertRaisesRegex(ValueError, "duplicate response status"):
+            convert(self.ir)
+
     def test_enum_array_and_optional(self):
         self.ir["types"].append({
             "kind": "enum", "name": "Winner", "values": ["Human", "Bot"]
