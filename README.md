@@ -178,9 +178,12 @@ directory. See `dodger/README.md` for controls and standalone commands.
 
 Dodger's HTTP server uses generated C++20 code for its JSON format and route
 dispatch. Socket handling, HTTP framing, and exception-to-status mapping
-remain in the server. `make check` tests codec round trips, invalid actions,
-and live responses against the generated OpenAPI schemas. It also changes a
-route annotation in a temporary header and verifies that both OpenAPI and a
-separately built live server follow the new path.
+remain in the server. It serves the generated document at `GET /openapi.json`
+from bytes embedded in the binary, so the endpoint works independently of the
+server's working directory. `make check` tests codec round trips, invalid
+actions, and live responses against the generated OpenAPI schemas. It also
+changes a route annotation in a temporary header and verifies that both
+OpenAPI and a separately built live server follow the new path.
 An external OpenAPI validator checks the document before client generation;
-the live check calls all three Dodger operations through that client.
+the live check calls all three Dodger operations through that client and checks
+that `/openapi.json` returns the generated file byte for byte.

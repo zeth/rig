@@ -41,6 +41,7 @@ From the repository root, run `make server`, then use either player endpoint:
 
 ```sh
 curl http://127.0.0.1:8765/games/1
+curl http://127.0.0.1:8765/openapi.json
 curl -X POST http://127.0.0.1:8765/games/1/players/1/actions \
   -H 'Content-Type: application/json' -d '{"move":"Right","shove":false}'
 curl -X POST http://127.0.0.1:8765/games/1/players/2/actions \
@@ -64,4 +65,5 @@ same movement and shove rules as the human client. After `make check` or
 can also connect to a separately running `make server` instance.
 
 The demo hosts one game (`id` 1). The HTTP listener is intentionally limited
-to localhost and basic JSON requests.
+to localhost and basic JSON requests. `GET /openapi.json` serves the generated
+contract embedded in the server binary.

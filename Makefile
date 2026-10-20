@@ -15,6 +15,9 @@ build/rig.json: build/inspect
 build/openapi.json: build/rig.json tools/openapi.py
 	$(PYTHON) tools/openapi.py --title 'Dodger API' < build/rig.json > $@
 
+build/dodger_openapi.hpp: build/openapi.json tools/embed_openapi.py
+	$(PYTHON) tools/embed_openapi.py < build/openapi.json > $@
+
 build/client-venv/.ready: requirements-client.txt
 	$(PYTHON) -m venv build/client-venv
 	$(CLIENT_PYTHON) -m pip install -r requirements-client.txt
@@ -44,7 +47,7 @@ build/catalog-ir.json: build/catalog-inspect
 build/catalog-openapi.json: build/catalog-ir.json tools/openapi.py
 	$(PYTHON) tools/openapi.py --title 'Catalog API' < build/catalog-ir.json > $@
 
-build/dodger-server: dodger/game.cpp dodger/game.hpp dodger/server.cpp dodger/api.hpp build/dodger_routes.hpp
+build/dodger-server: dodger/game.cpp dodger/game.hpp dodger/server.cpp dodger/api.hpp build/dodger_routes.hpp build/dodger_openapi.hpp
 	$(CXX) -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -I. dodger/game.cpp dodger/server.cpp -o $@
 
 build/game-test: dodger/game.cpp dodger/game.hpp dodger/game_test.cpp dodger/api.hpp
@@ -53,7 +56,7 @@ build/game-test: dodger/game.cpp dodger/game.hpp dodger/game_test.cpp dodger/api
 build/json-codec-test: dodger/json_codec_test.cpp dodger/api.hpp build/dodger_json.hpp
 	$(CXX) -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -I. dodger/json_codec_test.cpp -o $@
 
-generate: build/openapi.json build/catalog-openapi.json build/dodger_routes.hpp
+generate: build/openapi.json build/catalog-openapi.json build/dodger_routes.hpp build/dodger_openapi.hpp
 	cp build/openapi.json dodger/openapi.json
 	cp build/catalog-openapi.json examples/catalog/openapi.json
 

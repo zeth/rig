@@ -92,6 +92,10 @@ def main():
         else:
             raise AssertionError("server did not start")
         assert status == 200
+        with urllib.request.urlopen(base + "/openapi.json", timeout=2) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "application/json"
+            assert response.read() == Path(spec_path).read_bytes()
         get_schema = spec["paths"]["/games/{id}"]["get"]["responses"]["200"]
         get_schema = get_schema["content"]["application/json"]["schema"]
         validate(state, get_schema, components)

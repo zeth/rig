@@ -1,4 +1,5 @@
 #include <dodger/game.hpp>
+#include <build/dodger_openapi.hpp>
 #include <build/dodger_routes.hpp>
 
 #include <nlohmann/json.hpp>
@@ -106,7 +107,7 @@ json dispatch(const Request& request) {
     throw HttpError(404, "route not found");
 }
 
-void send_response(int client, int status, const json& body) {
+void send_response(int client, int status, std::string_view payload) {
     const char* reason = "OK";
     if (status == 400) reason = "Bad Request";
     if (status == 404) reason = "Not Found";
@@ -114,10 +115,10 @@ void send_response(int client, int status, const json& body) {
     if (status == 411) reason = "Length Required";
     if (status == 413) reason = "Content Too Large";
     if (status == 500) reason = "Internal Server Error";
-    const auto payload = body.dump();
     const auto response = "HTTP/1.1 " + std::to_string(status) + " " + reason +
         "\r\nContent-Type: application/json\r\nContent-Length: " +
-        std::to_string(payload.size()) + "\r\nConnection: close\r\n\r\n" + payload;
+        std::to_string(payload.size()) + "\r\nConnection: close\r\n\r\n" +
+        std::string(payload);
     std::size_t sent = 0;
     while (sent < response.size()) {
         const auto count = send(client, response.data() + sent, response.size() - sent, MSG_NOSIGNAL);
@@ -126,9 +127,19 @@ void send_response(int client, int status, const json& body) {
     }
 }
 
+void send_response(int client, int status, const json& body) {
+    const auto payload = body.dump();
+    send_response(client, status, std::string_view(payload));
+}
+
 void handle_client(int client) {
     try {
-        send_response(client, 200, dispatch(read_request(client)));
+        const auto request = read_request(client);
+        if (request.method == "GET" && request.path == "/openapi.json") {
+            send_response(client, 200, rig::generated::openapi_json);
+        } else {
+            send_response(client, 200, dispatch(request));
+        }
     } catch (const HttpError& error) {
         send_response(client, error.status, rig_json::encode(dodger::ErrorResponse{error.what()}));
     } catch (const std::exception& error) {

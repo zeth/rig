@@ -6,8 +6,10 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 from pathlib import Path
 
+from embed_openapi import generate as embed_openapi
 from http_routes import generate
 from openapi import convert
 from test_server import request
@@ -32,12 +34,17 @@ def main():
             f"-I{temporary}", "-Iinclude", "-I.", "dodger/inspect.cpp", "-o", str(inspector),
         ], cwd=root, check=True)
         ir = json.loads(subprocess.check_output([inspector], cwd=root))
-        paths = convert(ir)["paths"]
+        document = convert(ir, title="Dodger API")
+        paths = document["paths"]
         assert "/matches/{id}" in paths
         assert "/games/{id}" not in paths
 
         (temporary / "build" / "dodger_routes.hpp").write_text(
             generate(ir, "dodger", "build/dodger_json.hpp")
+        )
+        openapi_json = json.dumps(document, indent=2) + "\n"
+        (temporary / "build" / "dodger_openapi.hpp").write_text(
+            embed_openapi(openapi_json.encode())
         )
         server_path = temporary / "server"
         subprocess.run([
@@ -65,6 +72,9 @@ def main():
                 raise AssertionError("server did not start")
             assert status == 200 and state["id"] == 1
             assert request(base + "/games/1")[0] == 404
+            with urllib.request.urlopen(base + "/openapi.json", timeout=2) as response:
+                assert response.status == 200
+                assert response.read() == openapi_json.encode()
         finally:
             server.terminate()
             try:
