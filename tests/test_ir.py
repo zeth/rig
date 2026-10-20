@@ -80,6 +80,57 @@ class IRValidationTests(unittest.TestCase):
         self.ir["types"].append(other)
         self.assertIs(validate(self.ir), self.ir)
 
+    def test_equivalent_parameterized_paths_are_rejected(self):
+        other = copy.deepcopy(self.ir["operations"][0])
+        other["name"] = "get_by_slug"
+        other["cpp_name"] = "sample::get_by_slug"
+        other["path"] = "/items/{slug}"
+        other["parameters"] = [{
+            "name": "slug", "type": {"kind": "builtin", "name": "string"},
+        }]
+        self.ir["operations"].append(other)
+        with self.assertRaisesRegex(ValueError, "ambiguous routes"):
+            validate(self.ir)
+
+    def test_crossing_route_specificity_is_rejected(self):
+        first = self.ir["operations"][0]
+        first["path"] = "/{group}/fixed"
+        first["parameters"] = [{
+            "name": "group", "type": {"kind": "builtin", "name": "string"},
+        }]
+        second = copy.deepcopy(first)
+        second["name"] = "get_other"
+        second["cpp_name"] = "sample::get_other"
+        second["path"] = "/known/{item}"
+        second["parameters"] = [{
+            "name": "item", "type": {"kind": "builtin", "name": "string"},
+        }]
+        self.ir["operations"].append(second)
+        with self.assertRaisesRegex(ValueError, "ambiguous routes"):
+            validate(self.ir)
+
+    def test_disjoint_routes_and_literal_precedence(self):
+        variable = self.ir["operations"][0]
+        variable["parameters"][0]["type"]["name"] = "string"
+        literal = copy.deepcopy(variable)
+        literal["name"] = "get_new"
+        literal["cpp_name"] = "sample::get_new"
+        literal["path"] = "/items/new"
+        literal["parameters"] = []
+        self.ir["operations"].append(literal)
+        self.assertIs(validate(self.ir), self.ir)
+        routes = http_routes(self.ir, "codec.hpp")
+        self.assertLess(routes.index('method == "GET" && std::regex_match(path, match, route_1)'),
+                        routes.index('method == "GET" && std::regex_match(path, match, route_0)'))
+
+        variable["parameters"][0]["type"]["name"] = "int"
+        self.assertIs(validate(self.ir), self.ir)
+        literal["path"] = "/items/123"
+        self.assertIs(validate(self.ir), self.ir)
+        routes = http_routes(self.ir, "codec.hpp")
+        self.assertLess(routes.index('method == "GET" && std::regex_match(path, match, route_1)'),
+                        routes.index('method == "GET" && std::regex_match(path, match, route_0)'))
+
 
 if __name__ == "__main__":
     unittest.main()

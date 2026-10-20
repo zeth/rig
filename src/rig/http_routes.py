@@ -3,7 +3,7 @@
 import json
 import re
 
-from .ir import identifier, route_pattern, validate
+from .ir import identifier, route_pattern, route_priority, validate
 
 
 def generate(ir, codec_header):
@@ -51,7 +51,10 @@ def generate(ir, codec_header):
         "    std::smatch match;",
     ]
 
-    for index, operation in enumerate(ir["operations"]):
+    # Validated overlapping routes have a strict specificity order. Keep IR
+    # order for routes with the same priority or disjoint match sets.
+    ordered = sorted(enumerate(ir["operations"]), key=lambda pair: route_priority(pair[1]))
+    for index, operation in ordered:
         name = identifier(operation["name"])
         parameters = {identifier(item["name"]): item for item in operation["parameters"]}
         pattern, captures = route_pattern(operation["path"], parameters)

@@ -147,6 +147,8 @@ Server-level HTTP errors such as malformed headers and unexpected failures
 are outside these per-operation declarations.
 The current codec generator targets public aggregate records. The route generator currently supports
 literal path segments and whole-segment `int` or string placeholders.
+IR validation rejects ambiguous overlapping routes, and generated dispatch
+places more specific paths first.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
 selected functions with `RIG_ROUTE`, and name its namespace at generation

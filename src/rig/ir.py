@@ -106,6 +106,53 @@ def route_pattern(path, parameters):
     return "".join(regex), captures
 
 
+def route_segments(path, parameters):
+    """Return validated route segments as (specificity, literal) pairs."""
+    route_pattern(path, parameters)
+    segments = []
+    for segment in path.split("/")[1:]:
+        if not segment:
+            continue
+        placeholder = PARAMETER.fullmatch(segment)
+        if placeholder:
+            kind = parameters[placeholder[1]]["type"]["name"]
+            segments.append((1 if kind == "int" else 2, ""))
+        else:
+            segments.append((0, segment))
+    return tuple(segments)
+
+
+def route_priority(operation):
+    parameters = {item["name"]: item for item in operation["parameters"]}
+    return tuple(kind for kind, _ in route_segments(operation["path"], parameters))
+
+
+def _segments_overlap(left, right):
+    if len(left) != len(right):
+        return False
+    for (left_kind, left_value), (right_kind, right_value) in zip(left, right):
+        if left_kind == right_kind == 0 and left_value != right_value:
+            return False
+        if left_kind == 0 and right_kind == 1 and not re.fullmatch(r"[0-9]+", left_value):
+            return False
+        if right_kind == 0 and left_kind == 1 and not re.fullmatch(r"[0-9]+", right_value):
+            return False
+    return True
+
+
+def _same_template(left, right):
+    return all(
+        (a_kind == b_kind == 0 and a_value == b_value) or
+        (a_kind != 0 and b_kind != 0)
+        for (a_kind, a_value), (b_kind, b_value) in zip(left, right)
+    )
+
+
+def _more_specific(left, right):
+    kinds = [(a[0], b[0]) for a, b in zip(left, right)]
+    return all(a <= b for a, b in kinds) and any(a < b for a, b in kinds)
+
+
 def validate(document):
     """Validate an IR document and return it unchanged for the generators."""
     ir = _object(document, "$", ("ir_version", "types", "operations"))
@@ -166,7 +213,7 @@ def validate(document):
                 type_ref(field["type"], f"$.types[{index}].fields[{member_index}].type")
 
     operation_names = set()
-    routes = set()
+    routes = {}
     for index, operation in enumerate(operations):
         location = f"$.operations[{index}]"
         operation = _object(
@@ -194,10 +241,21 @@ def validate(document):
         type_ref(operation["returns"], f"{location}.returns")
         path = operation["path"]
         _, captures = route_pattern(path, by_name)
+        segments = route_segments(path, by_name)
         route = (method, path)
         if route in routes:
             raise ValueError(f"{location}: duplicate route: {method} {path}")
-        routes.add(route)
+        for (existing_method, existing_path), existing_segments in routes.items():
+            if method != existing_method or not _segments_overlap(segments, existing_segments):
+                continue
+            if _same_template(segments, existing_segments) or not (
+                _more_specific(segments, existing_segments) or
+                _more_specific(existing_segments, segments)
+            ):
+                raise ValueError(
+                    f"{location}: ambiguous routes: {method} {existing_path} and {method} {path}"
+                )
+        routes[route] = segments
         bodies = parameter_names - captures.keys()
         if len(bodies) > 1:
             raise ValueError(f"{location}: operation {name} has multiple body parameters")

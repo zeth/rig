@@ -70,6 +70,13 @@ A placeholder must name exactly one parameter of type `int` or `string`.
 Other parameters form the JSON request body; at most one is allowed. `GET`
 and `DELETE` cannot have a body under the current convention. These rules
 are shared by OpenAPI and the C++20 HTTP dispatch generator.
+For the same method, literal segments take precedence over placeholders, and
+integer placeholders take precedence over string placeholders. Parameterized
+paths with the same shape, such as `/items/{id}` and `/items/{slug}`, are
+rejected. Routes whose match sets overlap without a consistent specificity
+order are also rejected. For example, `/{group}/fixed` and `/known/{item}`
+both match `/known/fixed` when their placeholders are strings. Generated
+dispatch uses the same precedence independently of declaration order.
 
 Record fields are all present in JSON. An `optional` field is present with
 either a value or `null`; it does not mean the field can be omitted. Successful
