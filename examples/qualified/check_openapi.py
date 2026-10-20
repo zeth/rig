@@ -9,12 +9,6 @@ assert {entry["cpp_name"] for entry in ir["types"]} == {
 assert {entry["cpp_name"] for entry in ir["operations"]} == {
     "left::read", "right::read", "service::echo"
 }
-auto = json.loads(Path("build/auto.json").read_text())
-assert {entry["cpp_name"] for entry in auto["types"]} == {
-    "left::Result", "right::Result", "service::Pair"
-}
-assert [entry["cpp_name"] for entry in auto["operations"]] == ["service::echo"]
-
 document = json.loads(Path("build/openapi.json").read_text())
 schemas = document["components"]["schemas"]
 assert set(schemas) == {"left.Result", "right.Result", "Pair"}

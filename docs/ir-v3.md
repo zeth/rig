@@ -7,7 +7,9 @@ build artifact; its version is independent of the Python package version.
 `rig inspect inspect.cpp -- -I.` compiles and runs an inspection entry point,
 validates its output, and writes the original IR bytes to standard output.
 `rig inspect --header api.hpp --namespace app -- -I.` creates that entry point
-from a C++20 API header and namespace.
+from a C++20 API header. Repeat `--namespace` to include annotated operations
+from several namespaces; reachable types and operations are emitted once in
+the order of the requested namespaces.
 
 ```json
 {

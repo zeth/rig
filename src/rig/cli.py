@@ -27,10 +27,10 @@ def main(argv=None):
     inspector = commands.add_parser("inspect", help="compile and run a C++26 inspector")
     inspector.add_argument("source", nargs="?", help="optional C++ inspection entry point")
     inspector.add_argument("--header", help="C++20 API header to inspect")
-    inspector.add_argument("--namespace", help="namespace containing annotated operations")
+    inspector.add_argument("--namespace", action="append", help="namespace containing annotated operations; repeat for multiple namespaces")
     inspector.add_argument("--cxx", default="g++", help="C++26 compiler (default: g++)")
     inspector.epilog = (
-        "Use either an entry point source or --header with --namespace. "
+        "Use either an entry point source or --header with one or more --namespace options. "
         "Pass additional compiler flags after --, for example: -- -Iinclude"
     )
     commands.add_parser("validate", help="validate IR on stdin")

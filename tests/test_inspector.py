@@ -82,6 +82,30 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["operations"][0]["name"], "get_item")
 
+    def test_header_mode_combines_namespaces_without_duplicate_types_or_operations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                'namespace common { struct Item { int value; }; }\n'
+                'namespace first {\n'
+                'RIG_ROUTE(GET, "/first") common::Item read();\n'
+                '}\n'
+                'namespace second {\n'
+                'RIG_ROUTE(GET, "/second") common::Item read();\n'
+                '}\n'
+            )
+            result = self.run_inspect(
+                directory, "--header", "api.hpp", "--namespace", "first",
+                "--namespace", "second", "--namespace", "first",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            ir = json.loads(result.stdout)
+            self.assertEqual([entry["cpp_name"] for entry in ir["types"]], ["common::Item"])
+            self.assertEqual(
+                [entry["cpp_name"] for entry in ir["operations"]],
+                ["first::read", "second::read"],
+            )
+
     def test_compilation_failure_has_no_ir_output(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "bad.cpp").write_text("int main( {\n")

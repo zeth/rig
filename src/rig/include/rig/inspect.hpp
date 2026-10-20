@@ -92,6 +92,34 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
     return ordered;
 }
 
+consteval std::vector<std::meta::info> namespace_types(
+    const std::vector<std::meta::info>& scopes) {
+    std::vector<std::meta::info> types;
+    for (auto scope : scopes) {
+        for (auto type : reachable_types(scope)) {
+            if (!contains_type(types, type)) types.push_back(type);
+        }
+    }
+    return types;
+}
+
+consteval std::vector<std::meta::info> namespace_operations(
+    const std::vector<std::meta::info>& scopes) {
+    std::vector<std::meta::info> operations;
+    for (auto scope : scopes) {
+        for (auto member : std::meta::members_of(
+                 scope, std::meta::access_context::unprivileged())) {
+            if (!has_route(member)) continue;
+            bool seen = false;
+            for (auto existing : operations) {
+                if (existing == member) seen = true;
+            }
+            if (!seen) operations.push_back(member);
+        }
+    }
+    return operations;
+}
+
 inline void quoted(std::ostream& output, std::string_view value) {
     output << '"';
     for (unsigned char ch : value) {
@@ -267,14 +295,20 @@ public:
 
     template <std::meta::info Scope>
     void add_namespace() {
-        static_assert(std::meta::is_namespace(Scope), "RIG expects a namespace root");
+        add_namespaces<Scope>();
+    }
+
+    template <std::meta::info... Scopes>
+    void add_namespaces() {
+        static_assert(sizeof...(Scopes) > 0 && (std::meta::is_namespace(Scopes) && ...),
+                      "RIG expects namespace roots");
         template for (constexpr auto type : std::define_static_array(
-            detail::reachable_types(Scope))) {
+            detail::namespace_types(std::vector<std::meta::info>{Scopes...}))) {
             add_type<type>();
         }
         template for (constexpr auto member : std::define_static_array(
-            std::meta::members_of(Scope, std::meta::access_context::unprivileged()))) {
-            if constexpr (detail::has_route(member)) add_operation<member>();
+            detail::namespace_operations(std::vector<std::meta::info>{Scopes...}))) {
+            add_operation<member>();
         }
     }
 

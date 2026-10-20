@@ -9,24 +9,26 @@ from pathlib import Path
 from .ir import identifier, validate
 
 
-def _registration_source(header, namespace):
+def _registration_source(header, namespaces):
     if not isinstance(header, str) or not header or any(
         ord(character) < 32 or character in ('"', '\\') for character in header
     ):
         raise ValueError(f"invalid C++ header path: {header!r}")
-    if not isinstance(namespace, str):
-        raise ValueError(f"invalid C++ namespace: {namespace!r}")
-    try:
-        parts = [identifier(part) for part in namespace.split("::")]
-    except ValueError:
-        raise ValueError(f"invalid C++ namespace: {namespace!r}") from None
+    qualified = []
+    for namespace in namespaces:
+        if not isinstance(namespace, str):
+            raise ValueError(f"invalid C++ namespace: {namespace!r}")
+        try:
+            qualified.append("::".join(identifier(part) for part in namespace.split("::")))
+        except ValueError:
+            raise ValueError(f"invalid C++ namespace: {namespace!r}") from None
     return (
         f'#include "{header}"\n'
         '#include <rig/inspect.hpp>\n'
         '#include <iostream>\n'
         'int main() {\n'
         '    rig::writer output(std::cout);\n'
-        f'    output.add_namespace<^^{"::".join(parts)}>();\n'
+        f'    output.add_namespaces<{", ".join("^^" + name for name in qualified)}>();\n'
         '    output.finish();\n'
         '}\n'
     )
@@ -38,9 +40,12 @@ def inspect(source=None, cxx="g++", compiler_flags=(), *, header=None, namespace
         raise ValueError("provide exactly one inspection source or --header")
     if header is None and namespace is not None:
         raise ValueError("--namespace requires --header")
-    if header is not None and namespace is None:
+    if header is not None and not namespace:
         raise ValueError("--header requires --namespace")
-    registration = _registration_source(header, namespace) if header is not None else None
+    namespaces = (namespace,) if isinstance(namespace, str) else namespace
+    if header is not None and not isinstance(namespaces, (tuple, list)):
+        raise ValueError(f"invalid C++ namespace: {namespace!r}")
+    registration = _registration_source(header, namespaces) if header is not None else None
     include_dir = Path(__file__).resolve().parent / "include"
     with tempfile.TemporaryDirectory(prefix="rig-inspect-") as directory:
         executable = Path(directory) / "inspector"

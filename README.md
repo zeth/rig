@@ -124,7 +124,7 @@ JSON. `rig openapi` emits OpenAPI 3.1 JSON; `rig json-codec` emits C++20
 `rig embed-openapi` emits a header containing the exact OpenAPI bytes. Each
 generator reads IR (or OpenAPI bytes for `embed-openapi`) on standard input
 and writes its result on standard output.
-`rig inspect` creates a C++26 entry point from a C++20 header and namespace,
+`rig inspect` creates a C++26 entry point from a C++20 header and one or more namespaces,
 or compiles an explicit entry point. It runs the inspector, validates its IR,
 and writes that IR to standard output. Pass application include paths and
 other compiler flags after `--`; use `--cxx` to select a compiler.
@@ -156,6 +156,10 @@ time:
 rig inspect --header api.hpp --namespace catalog -- -I. > rig.json
 rig openapi --title 'Catalog API' < rig.json > openapi.json
 ```
+
+Repeat `--namespace` when annotated operations span several namespaces. RIG
+collects their reachable record and enum types once, even when routes in
+different namespaces share a type.
 
 RIG creates the C++26 entry point, supplies the reflection flags and its
 installed include directory, and validates the resulting IR. Namespace discovery sees
