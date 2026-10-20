@@ -2,7 +2,7 @@
 
 import re
 
-from .ir import validate
+from .ir import public_names, validate
 
 
 PRIMITIVES = {
@@ -14,7 +14,9 @@ PRIMITIVES = {
 
 def convert(ir, title="API", version="0.1.0"):
     validate(ir)
-    types = {entry["name"]: entry for entry in ir["types"]}
+    types = {entry["cpp_name"]: entry for entry in ir["types"]}
+    schema_names = public_names(types)
+    operation_names = public_names(operation["cpp_name"] for operation in ir["operations"])
 
     def schema(type_ref):
         kind = type_ref["kind"]
@@ -26,7 +28,7 @@ def convert(ir, title="API", version="0.1.0"):
         if kind == "named":
             name = type_ref["name"]
             if name in types:
-                return {"$ref": f"#/components/schemas/{name}"}
+                return {"$ref": f"#/components/schemas/{schema_names[name]}"}
             raise ValueError(f"unregistered type: {name}")
         if kind == "array":
             return {"type": "array", "items": schema(type_ref["items"])}
@@ -35,7 +37,8 @@ def convert(ir, title="API", version="0.1.0"):
         raise ValueError(f"unsupported type kind: {kind}")
 
     components = {}
-    for name, entry in types.items():
+    for qualified, entry in types.items():
+        name = schema_names[qualified]
         if entry["kind"] == "record":
             properties = {field["name"]: schema(field["type"]) for field in entry["fields"]}
             components[name] = {
@@ -70,7 +73,7 @@ def convert(ir, title="API", version="0.1.0"):
                 bodies.append(parameter)
 
         result = {
-            "operationId": operation["name"],
+            "operationId": operation_names[operation["cpp_name"]],
             "responses": {
                 "200": {
                     "description": "Success",

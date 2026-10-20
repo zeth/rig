@@ -10,20 +10,20 @@ from rig.openapi import convert
 
 
 VALID = {
-    "ir_version": 2,
+    "ir_version": 3,
     "types": [
-        {"kind": "record", "name": "Item", "fields": [
+        {"kind": "record", "name": "Item", "cpp_name": "sample::Item", "fields": [
             {"name": "id", "type": {"kind": "builtin", "name": "int"}},
         ]},
-        {"kind": "record", "name": "Error", "fields": [
+        {"kind": "record", "name": "Error", "cpp_name": "sample::Error", "fields": [
             {"name": "message", "type": {"kind": "builtin", "name": "string"}},
         ]},
     ],
     "operations": [{
-        "name": "get_item", "method": "GET", "path": "/items/{id}",
+        "name": "get_item", "cpp_name": "sample::get_item", "method": "GET", "path": "/items/{id}",
         "parameters": [{"name": "id", "type": {"kind": "builtin", "name": "int"}}],
-        "returns": {"kind": "named", "name": "Item"},
-        "errors": [{"status": 404, "type": {"kind": "named", "name": "Error"}}],
+        "returns": {"kind": "named", "name": "sample::Item"},
+        "errors": [{"status": 404, "type": {"kind": "named", "name": "sample::Error"}}],
     }],
 }
 
@@ -39,7 +39,11 @@ class IRValidationTests(unittest.TestCase):
         cases = [
             (lambda ir: ir.pop("types"), "missing types"),
             (lambda ir: ir.update(ir_version=True), "unsupported RIG IR version"),
+            (lambda ir: ir.update(ir_version=2), "unsupported RIG IR version"),
             (lambda ir: ir["types"].append(copy.deepcopy(ir["types"][0])), "duplicate type name"),
+            (lambda ir: ir["types"][0].update(cpp_name="sample::Other"), "does not match cpp_name"),
+            (lambda ir: ir["types"][0].update(cpp_name="sample::bad-name"), "invalid qualified C\\+\\+ name"),
+            (lambda ir: ir["operations"][0].update(cpp_name="sample::other"), "does not match cpp_name"),
             (lambda ir: ir["types"][0]["fields"].append(copy.deepcopy(ir["types"][0]["fields"][0])), "duplicate field"),
             (lambda ir: ir["types"][0]["fields"][0]["type"].update(name="Missing", kind="named"), "unregistered type"),
             (lambda ir: ir["types"][0]["fields"][0]["type"].update(name=[]), "unsupported builtin type"),
@@ -47,7 +51,7 @@ class IRValidationTests(unittest.TestCase):
             (lambda ir: ir["operations"][0]["parameters"].clear(), "unbound placeholders"),
             (lambda ir: ir["operations"][0].update(path="/items/{id}/{id}"), "duplicate route parameter"),
             (lambda ir: ir["operations"][0].update(path="/items/{id}/"), "unsupported route path"),
-            (lambda ir: ir["operations"][0]["parameters"].append({"name": "body", "type": {"kind": "named", "name": "Item"}}), "body with GET"),
+            (lambda ir: ir["operations"][0]["parameters"].append({"name": "body", "type": {"kind": "named", "name": "sample::Item"}}), "body with GET"),
             (lambda ir: ir["operations"][0]["errors"].append(copy.deepcopy(ir["operations"][0]["errors"][0])), "duplicate response status"),
             (lambda ir: ir["operations"].append(copy.deepcopy(ir["operations"][0])), "duplicate operation name"),
         ]
@@ -62,13 +66,19 @@ class IRValidationTests(unittest.TestCase):
         self.ir["types"][0]["fields"][0]["type"] = {"kind": "named", "name": "Missing"}
         generators = (
             lambda: convert(self.ir),
-            lambda: json_codec(self.ir, "sample", "api.hpp"),
-            lambda: http_routes(self.ir, "sample", "codec.hpp"),
+            lambda: json_codec(self.ir, "api.hpp"),
+            lambda: http_routes(self.ir, "codec.hpp"),
         )
         for generate in generators:
             with self.subTest(generator=generate):
                 with self.assertRaisesRegex(ValueError, "unregistered type"):
                     generate()
+
+    def test_same_short_type_name_in_another_namespace_is_valid(self):
+        other = copy.deepcopy(self.ir["types"][0])
+        other["cpp_name"] = "other::Item"
+        self.ir["types"].append(other)
+        self.assertIs(validate(self.ir), self.ir)
 
 
 if __name__ == "__main__":

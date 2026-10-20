@@ -113,6 +113,14 @@ inline void quoted(std::ostream& output, std::string_view value) {
     output << '"';
 }
 
+template <std::meta::info Entity>
+std::string qualified_name() {
+    constexpr auto parent = std::meta::parent_of(Entity);
+    const auto scope = std::meta::display_string_of(parent);
+    const auto name = std::meta::identifier_of(Entity);
+    return scope == "::" ? std::string(name) : std::string(scope) + "::" + std::string(name);
+}
+
 template <std::meta::info Type>
 void emit_type(std::ostream& output) {
     constexpr auto type = std::meta::remove_cvref(Type);
@@ -143,7 +151,7 @@ void emit_type(std::ostream& output) {
         }
     } else {
         output << "{\"kind\":\"named\",\"name\":";
-        quoted(output, std::meta::identifier_of(type));
+        quoted(output, qualified_name<type>());
         output << '}';
     }
 }
@@ -152,6 +160,8 @@ template <std::meta::info Type>
 void emit_record(std::ostream& output) {
     output << "{\"kind\":\"record\",\"name\":";
     quoted(output, std::meta::identifier_of(Type));
+    output << ",\"cpp_name\":";
+    quoted(output, qualified_name<Type>());
     output << ",\"fields\":[";
     bool first = true;
     template for (constexpr auto field : std::define_static_array(
@@ -171,6 +181,8 @@ template <std::meta::info Type>
 void emit_enum(std::ostream& output) {
     output << "{\"kind\":\"enum\",\"name\":";
     quoted(output, std::meta::identifier_of(Type));
+    output << ",\"cpp_name\":";
+    quoted(output, qualified_name<Type>());
     output << ",\"values\":[";
     bool first = true;
     template for (constexpr auto value : std::define_static_array(
@@ -190,6 +202,8 @@ void emit_operation(std::ostream& output) {
     constexpr auto route = [:std::meta::constant_of(annotations[0]):];
     output << "{\"name\":";
     quoted(output, std::meta::identifier_of(Function));
+    output << ",\"cpp_name\":";
+    quoted(output, qualified_name<Function>());
     output << ",\"method\":";
     quoted(output, route.method);
     output << ",\"path\":";
@@ -233,7 +247,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":2,\"types\":[";
+        output_ << "{\"ir_version\":3,\"types\":[";
     }
 
     template <std::meta::info Type>

@@ -1,9 +1,10 @@
-"""Validation and shared route rules for RIG IR version 2."""
+"""Validation and shared route rules for RIG IR version 3."""
 
 import re
+from collections import Counter
 
 
-VERSION = 2
+VERSION = 3
 BUILTINS = {"int", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -15,6 +16,28 @@ def identifier(value):
     if not isinstance(value, str) or not IDENTIFIER.fullmatch(value):
         raise ValueError(f"invalid C++ identifier: {value!r}")
     return value
+
+
+def cpp_name(value):
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"invalid qualified C++ name: {value!r}")
+    try:
+        for part in value.split("::"):
+            identifier(part)
+    except ValueError:
+        raise ValueError(f"invalid qualified C++ name: {value!r}") from None
+    return value
+
+
+def public_names(qualified_names):
+    """Use short names unless another declaration has the same short name."""
+    names = list(qualified_names)
+    counts = Counter(name.rsplit("::", 1)[-1] for name in names)
+    return {
+        name: (short if counts[short] == 1 else name.replace("::", "."))
+        for name in names
+        for short in [name.rsplit("::", 1)[-1]]
+    }
 
 
 def _object(value, location, required, optional=()):
@@ -94,14 +117,17 @@ def validate(document):
     names = set()
     for index, entry in enumerate(entries):
         location = f"$.types[{index}]"
-        entry = _object(entry, location, ("kind", "name"), ("fields", "values"))
+        entry = _object(entry, location, ("kind", "name", "cpp_name"), ("fields", "values"))
         kind = entry["kind"]
         if kind not in ("record", "enum"):
             raise ValueError(f"{location}: unsupported declaration kind: {kind!r}")
         name = _name(entry["name"], f"{location}.name")
-        _unique(names, name, location, "type name")
+        qualified = cpp_name(entry["cpp_name"])
+        if qualified.rsplit("::", 1)[-1] != name:
+            raise ValueError(f"{location}: type name does not match cpp_name")
+        _unique(names, qualified, location, "type name")
         member_key = "fields" if kind == "record" else "values"
-        _object(entry, location, ("kind", "name", member_key))
+        _object(entry, location, ("kind", "name", "cpp_name", member_key))
         members = _array(entry[member_key], f"{location}.{member_key}")
         member_names = set()
         for member_index, member in enumerate(members):
@@ -124,7 +150,7 @@ def validate(document):
                 raise ValueError(f"{location}: unsupported builtin type: {ref['name']!r}")
         elif kind == "named":
             _object(ref, location, ("kind", "name"))
-            name = _name(ref["name"], f"{location}.name")
+            name = cpp_name(ref["name"])
             if name not in names:
                 raise ValueError(f"{location}: unregistered type: {name}")
         elif kind in ("array", "optional"):
@@ -145,10 +171,13 @@ def validate(document):
         location = f"$.operations[{index}]"
         operation = _object(
             operation, location,
-            ("name", "method", "path", "parameters", "returns"), ("errors",),
+            ("name", "cpp_name", "method", "path", "parameters", "returns"), ("errors",),
         )
         name = _name(operation["name"], f"{location}.name")
-        _unique(operation_names, name, location, "operation name")
+        qualified = cpp_name(operation["cpp_name"])
+        if qualified.rsplit("::", 1)[-1] != name:
+            raise ValueError(f"{location}: operation name does not match cpp_name")
+        _unique(operation_names, qualified, location, "operation name")
         method = operation["method"]
         if not isinstance(method, str) or method not in METHODS:
             raise ValueError(f"{location}.method: unsupported HTTP method: {method!r}")

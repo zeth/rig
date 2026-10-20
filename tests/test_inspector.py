@@ -37,7 +37,7 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 2)
+            self.assertEqual(ir["ir_version"], 3)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["types"][0]["fields"][0]["name"], "value")
             generated = self.run_inspect(

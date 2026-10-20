@@ -43,7 +43,7 @@ def main():
         assert "/games/{id}" not in paths
 
         (temporary / "build" / "dodger_routes.hpp").write_text(subprocess.check_output(
-            [rig, "http-routes", "--namespace", "dodger", "--codec-header", "build/dodger_json.hpp"],
+            [rig, "http-routes", "--codec-header", "build/dodger_json.hpp"],
             input=json.dumps(ir), text=True,
         ))
         (temporary / "build" / "dodger_openapi.hpp").write_text(subprocess.check_output(

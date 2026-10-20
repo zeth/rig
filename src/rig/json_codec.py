@@ -5,13 +5,12 @@ import re
 from .ir import identifier, validate
 
 
-def generate(ir, namespace, api_header):
+def generate(ir, api_header):
     validate(ir)
-    namespace = "::".join(identifier(part) for part in namespace.split("::"))
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", api_header):
         raise ValueError("invalid API header path")
     entries = ir["types"]
-    names = {identifier(entry["name"]) for entry in entries}
+    names = {entry["cpp_name"] for entry in entries}
 
     def cpp_type(ref):
         kind = ref["kind"]
@@ -21,10 +20,10 @@ def generate(ir, namespace, api_header):
             except KeyError:
                 raise ValueError(f"unsupported builtin type: {ref['name']}") from None
         if kind == "named":
-            name = identifier(ref["name"])
+            name = ref["name"]
             if name not in names:
                 raise ValueError(f"unregistered type: {name}")
-            return f"{namespace}::{name}"
+            return name
         if kind in {"array", "optional"}:
             inner = cpp_type(ref["items"] if kind == "array" else ref["value"])
             container = "vector" if kind == "array" else "optional"
@@ -101,8 +100,7 @@ def generate(ir, namespace, api_header):
     ]
 
     for entry in entries:
-        name = identifier(entry["name"])
-        qualified = f"{namespace}::{name}"
+        qualified = entry["cpp_name"]
         lines += [
             f"template <> struct codec<{qualified}> {{",
             f"    static json encode(const {qualified}& value);",
@@ -113,7 +111,7 @@ def generate(ir, namespace, api_header):
 
     for entry in entries:
         name = identifier(entry["name"])
-        qualified = f"{namespace}::{name}"
+        qualified = entry["cpp_name"]
         lines.append(f"inline json codec<{qualified}>::encode(const {qualified}& value) {{")
         if entry["kind"] == "enum":
             values = [identifier(value) for value in entry["values"]]

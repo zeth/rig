@@ -21,10 +21,10 @@ build/dodger_openapi.hpp: build/openapi.json $(RIG_SOURCE)
 	$(RIG) embed-openapi < $< > $@
 
 build/dodger_json.hpp: build/rig.json $(RIG_SOURCE)
-	$(RIG) json-codec --namespace dodger --api-header api.hpp < $< > $@
+	$(RIG) json-codec --api-header api.hpp < $< > $@
 
 build/dodger_routes.hpp: build/rig.json build/dodger_json.hpp $(RIG_SOURCE)
-	$(RIG) http-routes --namespace dodger --codec-header build/dodger_json.hpp < $< > $@
+	$(RIG) http-routes --codec-header build/dodger_json.hpp < $< > $@
 
 build/client-venv/.ready: requirements-client.txt
 	$(PYTHON) -m venv build/client-venv

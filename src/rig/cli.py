@@ -38,10 +38,8 @@ def main(argv=None):
     openapi.add_argument("--title", default="API")
     openapi.add_argument("--version", default="0.1.0")
     codec = commands.add_parser("json-codec", help="generate C++20 JSON codecs")
-    codec.add_argument("--namespace", required=True)
     codec.add_argument("--api-header", required=True)
     routes = commands.add_parser("http-routes", help="generate C++20 HTTP dispatch")
-    routes.add_argument("--namespace", required=True)
     routes.add_argument("--codec-header", required=True)
     commands.add_parser("embed-openapi", help="embed OpenAPI bytes in a C++20 header")
     args = parser.parse_args(argv)
@@ -63,9 +61,9 @@ def main(argv=None):
                 json.dump(convert(ir, args.title, args.version), sys.stdout, indent=2)
                 sys.stdout.write("\n")
             elif args.command == "json-codec":
-                sys.stdout.write(json_codec(ir, args.namespace, args.api_header))
+                sys.stdout.write(json_codec(ir, args.api_header))
             else:
-                sys.stdout.write(http_routes(ir, args.namespace, args.codec_header))
+                sys.stdout.write(http_routes(ir, args.codec_header))
     except (KeyError, ValueError) as error:
         parser.exit(1, f"rig: {error}\n")
 

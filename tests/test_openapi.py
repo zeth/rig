@@ -6,18 +6,18 @@ from rig.openapi import convert
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 2,
+            "ir_version": 3,
             "types": [{
-                "kind": "record", "name": "Result", "fields": [
+                "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
                 ]
             }],
             "operations": [{
-                "name": "get_result",
+                "name": "get_result", "cpp_name": "sample::get_result",
                 "method": "GET",
                 "path": "/results/{id}",
                 "parameters": [{"name": "id", "type": {"kind": "builtin", "name": "int"}}],
-                "returns": {"kind": "named", "name": "Result"},
+                "returns": {"kind": "named", "name": "sample::Result"},
             }],
         }
 
@@ -44,12 +44,12 @@ class ConversionTests(unittest.TestCase):
 
     def test_typed_error_response(self):
         self.ir["types"].append({
-            "kind": "record", "name": "ErrorResponse", "fields": [
+            "kind": "record", "name": "ErrorResponse", "cpp_name": "sample::ErrorResponse", "fields": [
                 {"name": "error", "type": {"kind": "builtin", "name": "string"}}
             ]
         })
         self.ir["operations"][0]["errors"] = [
-            {"status": 404, "type": {"kind": "named", "name": "ErrorResponse"}}
+            {"status": 404, "type": {"kind": "named", "name": "sample::ErrorResponse"}}
         ]
         responses = convert(self.ir)["paths"]["/results/{id}"]["get"]["responses"]
         self.assertEqual(
@@ -59,29 +59,29 @@ class ConversionTests(unittest.TestCase):
 
     def test_invalid_error_status_is_rejected(self):
         self.ir["operations"][0]["errors"] = [
-            {"status": 200, "type": {"kind": "named", "name": "Result"}}
+            {"status": 200, "type": {"kind": "named", "name": "sample::Result"}}
         ]
         with self.assertRaisesRegex(ValueError, "invalid error status"):
             convert(self.ir)
 
     def test_duplicate_error_status_is_rejected(self):
         self.ir["operations"][0]["errors"] = [
-            {"status": 404, "type": {"kind": "named", "name": "Result"}},
-            {"status": 404, "type": {"kind": "named", "name": "Result"}},
+            {"status": 404, "type": {"kind": "named", "name": "sample::Result"}},
+            {"status": 404, "type": {"kind": "named", "name": "sample::Result"}},
         ]
         with self.assertRaisesRegex(ValueError, "duplicate response status"):
             convert(self.ir)
 
     def test_enum_array_and_optional(self):
         self.ir["types"].append({
-            "kind": "enum", "name": "Winner", "values": ["Human", "Bot"]
+            "kind": "enum", "name": "Winner", "cpp_name": "sample::Winner", "values": ["Human", "Bot"]
         })
         self.ir["types"][0]["fields"].extend([
             {"name": "history", "type": {
-                "kind": "array", "items": {"kind": "named", "name": "Winner"}
+                "kind": "array", "items": {"kind": "named", "name": "sample::Winner"}
             }},
             {"name": "winner", "type": {
-                "kind": "optional", "value": {"kind": "named", "name": "Winner"}
+                "kind": "optional", "value": {"kind": "named", "name": "sample::Winner"}
             }},
         ])
         schemas = convert(self.ir)["components"]["schemas"]

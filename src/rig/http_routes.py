@@ -6,22 +6,21 @@ import re
 from .ir import identifier, route_pattern, validate
 
 
-def generate(ir, namespace, codec_header):
+def generate(ir, codec_header):
     validate(ir)
-    namespace = "::".join(identifier(part) for part in namespace.split("::"))
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", codec_header):
         raise ValueError("invalid codec header path")
 
-    names = {identifier(entry["name"]) for entry in ir["types"]}
+    names = {entry["cpp_name"] for entry in ir["types"]}
 
     def cpp_type(ref):
         if ref["kind"] == "builtin":
             return {"int": "int", "bool": "bool", "string": "std::string"}[ref["name"]]
         if ref["kind"] == "named":
-            name = identifier(ref["name"])
+            name = ref["name"]
             if name not in names:
                 raise ValueError(f"unregistered type: {name}")
-            return f"{namespace}::{name}"
+            return name
         if ref["kind"] in {"array", "optional"}:
             inner = cpp_type(ref["items"] if ref["kind"] == "array" else ref["value"])
             container = "vector" if ref["kind"] == "array" else "optional"
@@ -73,7 +72,7 @@ def generate(ir, namespace, codec_header):
             else:
                 value = f"decode_body<{param_type}>(body)"
             arguments.append(value)
-        lines.append(f"        return rig_json::encode({namespace}::{name}({', '.join(arguments)}));")
+        lines.append(f"        return rig_json::encode({operation['cpp_name']}({', '.join(arguments)}));")
         lines.append("    }")
     lines += [
         "    return std::nullopt;",

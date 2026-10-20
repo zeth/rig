@@ -129,7 +129,7 @@ or compiles an explicit entry point. It runs the inspector, validates its IR,
 and writes that IR to standard output. Pass application include paths and
 other compiler flags after `--`; use `--cxx` to select a compiler.
 Run `rig validate < rig.json` to check the shared IR contract without generating
-output. See [IR version 2](docs/ir-v2.md) for its format and current rules.
+output. See [IR version 3](docs/ir-v3.md) for its format and current rules.
 
 Current conventions are intentionally small: a parameter named in the route
 is a path parameter; one remaining parameter becomes a JSON request body;
@@ -140,12 +140,12 @@ JSON error response. The IR currently describes `int`, `bool`,
 `std::optional<T>`. Enums become JSON strings matching their C++ enumerator
 names. An optional field is always present and contains either a value or
 `null`. Unsupported types and ambiguous inputs fail loudly.
-Type names currently use their unqualified C++ identifier, so registering two
-types with the same short name is rejected by the shared IR validator.
+The IR carries qualified C++ names for types and operations. OpenAPI uses short
+schema names and operation IDs when unique, and dotted qualified names when
+short names collide. `examples/qualified` checks this across namespaces.
 Server-level HTTP errors such as malformed headers and unexpected failures
 are outside these per-operation declarations.
-The current codec generator targets public aggregate records in one named
-namespace, matching Dodger's API. The route generator currently supports
+The current codec generator targets public aggregate records. The route generator currently supports
 literal path segments and whole-segment `int` or string placeholders.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
@@ -160,8 +160,8 @@ rig openapi --title 'Catalog API' < rig.json > openapi.json
 RIG creates the C++26 entry point, supplies the reflection flags and its
 installed include directory, and validates the resulting IR. Namespace discovery sees
 directly declared functions with a route annotation and follows their
-referenced record and enum types. Unsupported references fail during OpenAPI
-conversion. For explicit registration, write a C++26 entry point using
+referenced record and enum types. Unsupported references fail during IR
+validation. For explicit registration, write a C++26 entry point using
 `rig::writer` and pass it to `rig inspect inspect.cpp -- -I.`. Catalog exercises
 that form; Dodger uses header and namespace mode.
 
