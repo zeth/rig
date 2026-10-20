@@ -1,10 +1,10 @@
-"""Validation and shared route rules for RIG IR version 8."""
+"""Validation and shared route rules for RIG IR version 9."""
 
 import re
 from collections import Counter
 
 
-VERSION = 8
+VERSION = 9
 BUILTINS = {"int", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -165,11 +165,26 @@ def _more_specific(left, right):
 
 def validate(document):
     """Validate an IR document and return it unchanged for the generators."""
-    ir = _object(document, "$", ("ir_version", "types", "operations"))
+    ir = _object(document, "$", ("ir_version", "types", "operations"), ("service",))
     if type(ir["ir_version"]) is not int or ir["ir_version"] != VERSION:
         raise ValueError(f"unsupported RIG IR version: {ir['ir_version']!r}")
     entries = _array(ir["types"], "$.types")
     operations = _array(ir["operations"], "$.operations")
+    if "service" in ir:
+        service = _object(ir["service"], "$.service", ("title", "version", "servers"),
+                          ("bearer_auth",))
+        for key in ("title", "version"):
+            if not isinstance(service[key], str) or not service[key]:
+                raise ValueError(f"$.service.{key}: expected nonempty text")
+        servers = _array(service["servers"], "$.service.servers")
+        for index, url in enumerate(servers):
+            if not isinstance(url, str) or not url:
+                raise ValueError(f"$.service.servers[{index}]: expected nonempty URL")
+        if "bearer_auth" in service:
+            auth = _object(service["bearer_auth"], "$.service.bearer_auth", ("name", "format"))
+            _name(auth["name"], "$.service.bearer_auth.name")
+            if not isinstance(auth["format"], str) or not auth["format"]:
+                raise ValueError("$.service.bearer_auth.format: expected nonempty text")
 
     names = set()
     for index, entry in enumerate(entries):

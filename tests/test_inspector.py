@@ -38,7 +38,7 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 8)
+            self.assertEqual(ir["ir_version"], 9)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["operations"][1]["parameters"][0]["in"], "query")
             self.assertEqual(ir["operations"][1]["parameters"][0]["range"],
@@ -137,6 +137,9 @@ class InspectorTests(unittest.TestCase):
             (Path(directory) / "api.hpp").write_text(
                 '#include <rig/route.hpp>\n'
                 'namespace sample {\n'
+                'struct RIG_API("Example API", "0.2.0") RIG_SERVER("/") '
+                'RIG_SERVER("http://127.0.0.1:9000") '
+                'RIG_BEARER_AUTH("bearerAuth", "token") Service {};\n'
                 'struct RIG_OPEN_RECORD Reply { bool ok RIG_BOOL_VALUE(true); };\n'
                 'struct Error { bool ok RIG_BOOL_VALUE(false); };\n'
                 'RIG_ROUTE(POST, "/bye")\n'
@@ -150,6 +153,11 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
+            self.assertEqual(ir["service"], {
+                "title": "Example API", "version": "0.2.0",
+                "servers": ["/", "http://127.0.0.1:9000"],
+                "bearer_auth": {"name": "bearerAuth", "format": "token"},
+            })
             self.assertEqual(ir["types"][0]["fields"][0]["bool_value"], True)
             self.assertTrue(ir["types"][0]["open"])
             operation = ir["operations"][0]

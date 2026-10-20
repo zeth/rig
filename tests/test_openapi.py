@@ -6,7 +6,7 @@ from rig.openapi import convert
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 8,
+            "ir_version": 9,
             "types": [{
                 "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
@@ -49,6 +49,22 @@ class ConversionTests(unittest.TestCase):
         document = convert(self.ir, include_operation_ids=False)
         self.assertNotIn("additionalProperties", document["components"]["schemas"]["Result"])
         self.assertNotIn("operationId", document["paths"]["/results/{id}"]["get"])
+
+    def test_service_metadata_and_bearer_security(self):
+        self.ir["service"] = {
+            "title": "Example API", "version": "0.2.0",
+            "servers": ["/", "http://127.0.0.1:9000"],
+            "bearer_auth": {"name": "bearerAuth", "format": "token"},
+        }
+        document = convert(self.ir)
+        self.assertEqual(document["info"], {"title": "Example API", "version": "0.2.0"})
+        self.assertEqual(document["servers"], [
+            {"url": "/"}, {"url": "http://127.0.0.1:9000"},
+        ])
+        self.assertEqual(document["security"], [{"bearerAuth": []}])
+        self.assertEqual(document["components"]["securitySchemes"], {
+            "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "token"},
+        })
 
     def test_integer_path_advertises_generated_invalid_request(self):
         document = convert(self.ir)

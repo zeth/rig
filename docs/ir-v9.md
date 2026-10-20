@@ -1,4 +1,4 @@
-# RIG IR version 8
+# RIG IR version 9
 
 RIG's C++26 inspector writes one JSON object to standard output. The `rig`
 generators read that object from standard input. `rig validate < rig.json`
@@ -13,7 +13,7 @@ the order of the requested namespaces.
 
 ```json
 {
-  "ir_version": 8,
+  "ir_version": 9,
   "types": [
     {"kind": "record", "name": "Item", "cpp_name": "app::Item", "fields": [
       {"name": "id", "type": {"kind": "builtin", "name": "int"}}
@@ -40,7 +40,8 @@ the order of the requested namespaces.
 }
 ```
 
-The top level has exactly `ir_version`, `types`, and `operations`. A type is a
+The top level has `ir_version`, `types`, and `operations`, plus optional
+`service` metadata. A type is a
 `record` with ordered `fields` or an `enum` with ordered string `values`.
 Records, fields, enums, enumerators, operations, and parameters have short
 C++ identifier `name` values. Each type and operation also has a fully
@@ -98,9 +99,9 @@ dispatch uses the same precedence independently of declaration order.
 Record fields are all present in JSON. An `optional` field is present with
 either a value or `null`; it does not mean the field can be omitted. Successful
 operations have a JSON response with HTTP 200. Unknown keys and unsupported
-types are rejected so that every generator interprets version 8 the same way.
+types are rejected so that every generator interprets version 9 the same way.
 Older IR is rejected; regenerate it with `rig inspect` before running the
-version 8 generators. `json-codec` and `http-routes` use `cpp_name` and no
+version 9 generators. `json-codec` and `http-routes` use `cpp_name` and no
 longer take `--namespace`.
 
 `RIG_SUMMARY`, `RIG_DESCRIPTION`, and `RIG_RESPONSE_DESCRIPTION` annotate an
@@ -123,6 +124,16 @@ unknown JSON fields when decoding it. Other records remain closed.
 `rig openapi --omit-operation-ids` suppresses inferred operation IDs when an
 existing contract relies on path-based client naming; inferred IDs remain the
 default.
+
+`RIG_API(title, version)` on an empty C++ service record marks it for namespace
+discovery. Repeated `RIG_SERVER(url)` annotations list the advertised server
+URLs, and one `RIG_BEARER_AUTH(name, format)` declares a global HTTP bearer
+scheme. The inspector emits these as a `service` object with `title`,
+`version`, `servers`, and optional `bearer_auth`. OpenAPI uses them for `info`,
+`servers`, `components.securitySchemes`, and global `security`. Without a
+service declaration, `rig openapi` continues to use its title and version
+arguments and emits no servers or security scheme. A namespace registration
+can discover at most one service declaration.
 
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
 The IR shape is unchanged: `returns` describes the success body, and `errors`

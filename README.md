@@ -134,7 +134,7 @@ or compiles an explicit entry point. It runs the inspector, validates its IR,
 and writes that IR to standard output. Pass application include paths and
 other compiler flags after `--`; use `--cxx` to select a compiler.
 Run `rig validate < rig.json` to check the shared IR contract without generating
-output. See [IR version 8](docs/ir-v8.md) for its format and current rules.
+output. See [IR version 9](docs/ir-v9.md) for its format and current rules.
 Use `RIG_RANGE(minimum, maximum)` on an integer parameter to publish inclusive
 bounds in OpenAPI and enforce them in generated HTTP dispatch.
 

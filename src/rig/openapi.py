@@ -14,6 +14,9 @@ PRIMITIVES = {
 
 def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
     validate(ir)
+    service = ir.get("service")
+    if service:
+        title, version = service["title"], service["version"]
     types = {entry["cpp_name"]: entry for entry in ir["types"]}
     schema_names = public_names(types)
     operation_names = public_names(operation["cpp_name"] for operation in ir["operations"])
@@ -154,9 +157,21 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         methods = paths.setdefault(path, {})
         methods[method] = result
 
-    return {
+    document = {
         "openapi": "3.1.0",
         "info": {"title": title, "version": version},
         "paths": paths,
         "components": {"schemas": components},
     }
+    if service:
+        document["servers"] = [{"url": url} for url in service["servers"]]
+        if "bearer_auth" in service:
+            name = service["bearer_auth"]["name"]
+            document["components"]["securitySchemes"] = {
+                name: {
+                    "type": "http", "scheme": "bearer",
+                    "bearerFormat": service["bearer_auth"]["format"],
+                }
+            }
+            document["security"] = [{name: []}]
+    return document

@@ -10,7 +10,7 @@ from rig.openapi import convert
 
 
 VALID = {
-    "ir_version": 8,
+    "ir_version": 9,
     "types": [
         {"kind": "record", "name": "Item", "cpp_name": "sample::Item", "fields": [
             {"name": "id", "type": {"kind": "builtin", "name": "int"}},
@@ -76,6 +76,20 @@ class IRValidationTests(unittest.TestCase):
     def test_open_record_flag_must_be_boolean(self):
         self.ir["types"][0]["open"] = "yes"
         with self.assertRaisesRegex(ValueError, "expected boolean"):
+            validate(self.ir)
+
+    def test_service_metadata_validation(self):
+        self.ir["service"] = {
+            "title": "Example API", "version": "0.1.0", "servers": ["/"],
+            "bearer_auth": {"name": "bearerAuth", "format": "token"},
+        }
+        self.assertIs(validate(self.ir), self.ir)
+        self.ir["service"]["servers"] = [""]
+        with self.assertRaisesRegex(ValueError, "expected nonempty URL"):
+            validate(self.ir)
+        self.ir["service"]["servers"] = ["/"]
+        self.ir["service"]["bearer_auth"]["name"] = "bad-name"
+        with self.assertRaisesRegex(ValueError, "invalid C\\+\\+ identifier"):
             validate(self.ir)
 
     def test_structure_and_references(self):

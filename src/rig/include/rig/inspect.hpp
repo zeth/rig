@@ -11,6 +11,7 @@
 #include <array>
 #include <cstddef>
 #include <ostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -23,6 +24,11 @@ namespace detail {
 consteval bool has_route(std::meta::info member) {
     return std::meta::is_function(member) &&
         !std::meta::annotations_of_with_type(member, ^^rig::route).empty();
+}
+
+consteval bool has_service(std::meta::info member) {
+    return std::meta::is_type(member) && std::meta::is_class_type(member) &&
+        !std::meta::annotations_of_with_type(member, ^^rig::api).empty();
 }
 
 consteval bool is_result_type(std::meta::info type) {
@@ -129,6 +135,20 @@ consteval std::vector<std::meta::info> namespace_operations(
         }
     }
     return operations;
+}
+
+consteval std::vector<std::meta::info> namespace_services(
+    const std::vector<std::meta::info>& scopes) {
+    std::vector<std::meta::info> services;
+    for (auto scope : scopes) {
+        for (auto member : std::meta::members_of(
+                 scope, std::meta::access_context::unprivileged())) {
+            if (has_service(member) && !contains_type(services, member)) {
+                services.push_back(member);
+            }
+        }
+    }
+    return services;
 }
 
 inline void quoted(std::ostream& output, std::string_view value) {
@@ -244,6 +264,40 @@ void emit_enum(std::ostream& output) {
         quoted(output, std::meta::identifier_of(value));
     }
     output << "]}";
+}
+
+template <std::meta::info Type>
+void emit_service(std::ostream& output) {
+    constexpr auto apis = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::api));
+    static_assert(apis.size() == 1, "RIG service declarations need exactly one API annotation");
+    constexpr auto metadata = [:std::meta::constant_of(apis[0]):];
+    output << "{\"title\":";
+    quoted(output, metadata.title);
+    output << ",\"version\":";
+    quoted(output, metadata.version);
+    output << ",\"servers\":[";
+    bool first = true;
+    template for (constexpr auto annotation : std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::server))) {
+        if (!first) output << ',';
+        first = false;
+        constexpr auto value = [:std::meta::constant_of(annotation):];
+        quoted(output, value.url);
+    }
+    output << ']';
+    constexpr auto auth = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::bearer_auth));
+    static_assert(auth.size() <= 1, "RIG service declarations need at most one bearer auth");
+    if constexpr (auth.size() == 1) {
+        constexpr auto value = [:std::meta::constant_of(auth[0]):];
+        output << ",\"bearer_auth\":{\"name\":";
+        quoted(output, value.name);
+        output << ",\"format\":";
+        quoted(output, value.format);
+        output << '}';
+    }
+    output << '}';
 }
 
 consteval std::vector<std::meta::info> result_errors(std::meta::info type) {
@@ -387,7 +441,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":8,\"types\":[";
+        output_ << "{\"ir_version\":9,\"types\":[";
     }
 
     template <std::meta::info Type>
@@ -414,6 +468,10 @@ public:
     void add_namespaces() {
         static_assert(sizeof...(Scopes) > 0 && (std::meta::is_namespace(Scopes) && ...),
                       "RIG expects namespace roots");
+        template for (constexpr auto service : std::define_static_array(
+            detail::namespace_services(std::vector<std::meta::info>{Scopes...}))) {
+            add_service<service>();
+        }
         template for (constexpr auto type : std::define_static_array(
             detail::namespace_types(std::vector<std::meta::info>{Scopes...}))) {
             add_type<type>();
@@ -432,10 +490,20 @@ public:
         detail::emit_operation<Function>(output_);
     }
 
+    template <std::meta::info Type>
+    void add_service() {
+        if (!service_json_.empty()) throw std::logic_error("RIG service already registered");
+        std::ostringstream output;
+        detail::emit_service<Type>(output);
+        service_json_ = output.str();
+    }
+
     void finish() {
         if (stage_ == stage::finished) throw std::logic_error("writer already finished");
         begin_operations();
-        output_ << "]}\n";
+        output_ << ']';
+        if (!service_json_.empty()) output_ << ",\"service\":" << service_json_;
+        output_ << "}\n";
         stage_ = stage::finished;
     }
 
@@ -454,6 +522,7 @@ private:
     std::ostream& output_;
     stage stage_ = stage::types;
     bool first_ = true;
+    std::string service_json_;
 };
 
 } // namespace rig
