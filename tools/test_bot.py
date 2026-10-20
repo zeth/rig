@@ -5,12 +5,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dodger"))
 
 from bot import choose_action
+from dodger_api_client.models import GameState, Move
 from terminal import render
 
 
 class BotTests(unittest.TestCase):
     def setUp(self):
         self.state = {
+            "id": 1,
             "arena_width": 20,
             "arena_height": 12,
             "tick": 10,
@@ -23,13 +25,13 @@ class BotTests(unittest.TestCase):
 
     def test_bot_dodges_imminent_obstacle(self):
         self.state["obstacles"] = [{"x": 5, "y": 10, "width": 2}]
-        self.assertEqual(choose_action(self.state)["move"], "Left")
+        self.assertEqual(choose_action(GameState.from_dict(self.state)).move, Move.LEFT)
 
     def test_bot_shoves_when_in_range(self):
         self.state["human"]["x"] = 5
-        self.assertTrue(choose_action(self.state)["shove"])
+        self.assertTrue(choose_action(GameState.from_dict(self.state)).shove)
         self.state["bot"]["shove_cooldown_ticks"] = 2
-        self.assertFalse(choose_action(self.state)["shove"])
+        self.assertFalse(choose_action(GameState.from_dict(self.state)).shove)
 
     def test_terminal_renders_state(self):
         self.state["obstacles"] = [{"x": 1, "y": 2, "width": 2}]

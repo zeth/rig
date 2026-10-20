@@ -48,15 +48,19 @@ curl -X POST http://127.0.0.1:8765/games/1/players/2/actions \
 ```
 
 For a playable match, run `make play` in a terminal. It starts the server, a
-Python bot using the HTTP API, and a terminal client for the human player.
+Python bot using the client generated from OpenAPI, and a terminal client for
+the human player. The first run installs the pinned client tools in an ignored
+virtual environment under `build/`.
+
 Use A/D or the arrow keys to move, Space to shove, and Q to quit. Hold a
 movement key to keep moving; the most recent key is applied for one client
 update (about three simulation ticks). Restart `make play` for a new game.
 
-The bot uses only Python's standard library. Every tenth of a second, it
-reads the game state, compares left/stay/right against the next few obstacle
-positions, and sends its action over HTTP. It sees the same state and has the
-same movement and shove rules as the human client. `python3 dodger/bot.py`
+Every tenth of a second, the bot reads the game state through generated Python
+models, compares left/stay/right against the next few obstacle positions, and
+sends its action over HTTP. It sees the same state and has the
+same movement and shove rules as the human client. After `make check` or
+`make play` generates the client, `build/client-venv/bin/python dodger/bot.py`
 can also connect to a separately running `make server` instance.
 
 The demo hosts one game (`id` 1). The HTTP listener is intentionally limited

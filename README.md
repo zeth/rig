@@ -105,9 +105,11 @@ Developers continue writing ordinary C++20. RIG uses C++26 reflection at generat
 The repository now contains a deliberately narrow working slice. From this
 directory, run `make generate` to regenerate Dodger and the independent
 catalog example; run `make check` to verify both C++20 headers, conversion
-rules, and generated-file drift. GCC 16 with `-freflection` and Python 3 are
-required for generation. Ordinary consumers compile their API headers as
-C++20 without reflection.
+rules, generated-file drift, and an independently generated Python client.
+GCC 16 with `-freflection` and Python 3.11 or later are required for the full
+check. The client check creates an ignored virtual environment and installs
+the pinned tools in `requirements-client.txt`. Ordinary consumers compile
+their API headers as C++20 without reflection.
 
 `include/rig/inspect.hpp` is the reusable C++26 reflection writer. Dodger's
 `dodger/inspect.cpp` nominates its namespace once; RIG discovers its
@@ -170,9 +172,9 @@ server over HTTP and checks its success and error responses against the generate
 schemas.
 
 Run `make play` in a terminal to launch the server, a Python bot that uses
-the HTTP routes, and a terminal client for the human player. The bot and
-client use only Python's standard library. See `dodger/README.md` for
-controls and standalone commands.
+the client generated from Dodger's OpenAPI document, and a terminal client for
+the human player. The generated client is kept under the ignored `build/`
+directory. See `dodger/README.md` for controls and standalone commands.
 
 Dodger's HTTP server uses generated C++20 code for its JSON format and route
 dispatch. Socket handling, HTTP framing, and exception-to-status mapping
@@ -180,3 +182,5 @@ remain in the server. `make check` tests codec round trips, invalid actions,
 and live responses against the generated OpenAPI schemas. It also changes a
 route annotation in a temporary header and verifies that both OpenAPI and a
 separately built live server follow the new path.
+An external OpenAPI validator checks the document before client generation;
+the live check calls all three Dodger operations through that client.

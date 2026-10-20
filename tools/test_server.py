@@ -1,6 +1,7 @@
 """Exercise the live Dodger routes against RIG's generated response schemas."""
 
 import json
+from http import HTTPStatus
 import socket
 import subprocess
 import sys
@@ -8,6 +9,12 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "build"))
+
+from dodger_api_client import Client
+from dodger_api_client.api.default import get_game, submit_action, submit_human_action
+from dodger_api_client.models import Action, ErrorResponse, GameState, Move
 
 
 def validate(value, schema, components):
@@ -90,6 +97,26 @@ def main():
         validate(state, get_schema, components)
         assert state["status"] == "Waiting"
         assert state["winner"] is None
+
+        with Client(base_url=base, raise_on_unexpected_status=True) as client:
+            found = get_game.sync_detailed(id=1, client=client)
+            assert found.status_code == HTTPStatus.OK
+            assert isinstance(found.parsed, GameState)
+            missing = get_game.sync_detailed(id=2, client=client)
+            assert missing.status_code == HTTPStatus.NOT_FOUND
+            assert isinstance(missing.parsed, ErrorResponse)
+            action_model = Action(move=Move.STAY, shove=False)
+            human_response = submit_human_action.sync_detailed(
+                id=1, client=client, body=action_model
+            )
+            assert human_response.status_code == HTTPStatus.OK
+            assert isinstance(human_response.parsed, GameState)
+            bot_response = submit_action.sync_detailed(id=1, client=client, body=action_model)
+            assert bot_response.status_code == HTTPStatus.OK
+            assert isinstance(bot_response.parsed, GameState)
+            missing_action = submit_action.sync_detailed(id=2, client=client, body=action_model)
+            assert missing_action.status_code == HTTPStatus.NOT_FOUND
+            assert isinstance(missing_action.parsed, ErrorResponse)
 
         human_path = "/games/1/players/1/actions"
         bot_path = "/games/1/players/2/actions"
