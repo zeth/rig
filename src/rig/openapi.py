@@ -2,7 +2,7 @@
 
 import re
 
-from .ir import public_names, validate
+from .ir import public_names, request_needs_decoding, validate
 
 
 PRIMITIVES = {
@@ -52,6 +52,22 @@ def convert(ir, title="API", version="0.1.0"):
         else:
             raise ValueError(f"unsupported declaration kind: {entry['kind']}")
 
+    invalid_request_name = "RigInvalidRequest"
+    if any(request_needs_decoding(operation) for operation in ir["operations"]):
+        suffix = 2
+        while invalid_request_name in components:
+            invalid_request_name = f"RigInvalidRequest{suffix}"
+            suffix += 1
+        components[invalid_request_name] = {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "enum": ["invalid_request"]},
+                "message": {"type": "string"},
+            },
+            "required": ["code", "message"],
+            "additionalProperties": False,
+        }
+
     paths = {}
     for operation in ir["operations"]:
         method = operation["method"].lower()
@@ -88,6 +104,19 @@ def convert(ir, title="API", version="0.1.0"):
                 "description": "Error",
                 "content": {"application/json": {"schema": schema(error["type"])}}
             }
+        if request_needs_decoding(operation):
+            invalid_schema = {"$ref": f"#/components/schemas/{invalid_request_name}"}
+            existing = result["responses"].get("400")
+            if existing:
+                error_schema = existing["content"]["application/json"]["schema"]
+                existing["content"]["application/json"]["schema"] = {
+                    "anyOf": [error_schema, invalid_schema],
+                }
+            else:
+                result["responses"]["400"] = {
+                    "description": "Invalid request",
+                    "content": {"application/json": {"schema": invalid_schema}},
+                }
         if parameters:
             result["parameters"] = parameters
         if bodies:

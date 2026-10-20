@@ -152,6 +152,9 @@ The current codec generator targets public aggregate records. The route generato
 literal path segments and whole-segment `int` or string placeholders.
 IR validation rejects ambiguous overlapping routes, and generated dispatch
 places more specific paths first.
+Generated dispatch also returns a documented 400 response when an integer path
+value or JSON body cannot be decoded. It calls the application operation only
+after decoding succeeds.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
 selected functions with `RIG_ROUTE`, and name its namespace at generation

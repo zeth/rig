@@ -28,6 +28,16 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RigInvalidRequest"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -61,7 +71,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RigInvalidRequest"
+                    }
+                  ]
                 }
               }
             }
@@ -128,7 +145,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RigInvalidRequest"
+                    }
+                  ]
                 }
               }
             }
@@ -322,6 +346,25 @@
         },
         "required": [
           "error"
+        ],
+        "additionalProperties": false
+      },
+      "RigInvalidRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
         ],
         "additionalProperties": false
       }

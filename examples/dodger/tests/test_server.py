@@ -56,7 +56,7 @@ def validate(value, schema, components):
 
 
 def request(url, method="GET", body=None):
-    data = json.dumps(body).encode() if body is not None else None
+    data = body if isinstance(body, bytes) else json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
         url, data=data, method=method,
         headers={"Content-Type": "application/json"} if data else {},
@@ -148,11 +148,15 @@ def main():
             assert status == expected_status
             schema = spec["paths"][schema_path][method.lower()]["responses"][str(status)]
             validate(response, schema["content"]["application/json"]["schema"], components)
-            assert response["error"]
+            assert response.get("error") or response.get("message")
 
         check_error(base + "/games/2", "GET", None, "/games/{id}", 404)
         check_error(base + bot_path, "POST", {"move": "Jump", "shove": False},
                     "/games/{id}/players/2/actions", 400)
+        check_error(base + bot_path, "POST", b'{"move":',
+                    "/games/{id}/players/2/actions", 400)
+        check_error(base + "/games/999999999999999999999", "GET", None,
+                    "/games/{id}", 400)
         check_error(base + "/games/2/players/1/actions", "POST", action,
                     "/games/{id}/players/1/actions", 404)
         for player in (1, 2):

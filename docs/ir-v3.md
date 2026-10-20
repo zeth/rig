@@ -93,3 +93,10 @@ longer take `--namespace`.
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
 The IR shape is unchanged: `returns` describes the success body, and `errors`
 describes the status and body of each typed error alternative.
+
+When a route converts an integer path parameter or decodes a JSON body, RIG
+also declares an HTTP 400 response for invalid input. Its body has `code` set
+to `invalid_request` and a string `message`. If the operation declares its own
+400 error, OpenAPI uses `anyOf` for both bodies. The generated HTTP dispatcher
+returns this input error before invoking the application function; exceptions
+thrown by the function remain application failures.

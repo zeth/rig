@@ -31,6 +31,8 @@ reachable types without a separate declaration list or C++26 app code.
 The routes declare a shared `ErrorResponse` type and their 400, 404, and 409
 responses with `rig::result` and `rig::error`; these appear in the generated
 OpenAPI document and are returned by the generated HTTP dispatcher.
+Invalid path integers and JSON bodies produce RIG's documented
+`invalid_request` response before a game operation runs.
 
 The sample contract now has left/stay/right actions, player lives and shove
 cooldowns, falling obstacles, and a waiting/running/finished game status. A

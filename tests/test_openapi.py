@@ -30,6 +30,29 @@ class ConversionTests(unittest.TestCase):
             {"$ref": "#/components/schemas/Result"},
         )
 
+    def test_integer_path_advertises_generated_invalid_request(self):
+        document = convert(self.ir)
+        invalid = document["components"]["schemas"]["RigInvalidRequest"]
+        self.assertEqual(invalid["required"], ["code", "message"])
+        self.assertEqual(invalid["properties"]["code"]["enum"], ["invalid_request"])
+        response = document["paths"]["/results/{id}"]["get"]["responses"]["400"]
+        self.assertEqual(response["content"]["application/json"]["schema"], {
+            "$ref": "#/components/schemas/RigInvalidRequest",
+        })
+
+    def test_declared_400_and_generated_invalid_request_share_response(self):
+        self.ir["operations"][0]["errors"] = [{
+            "status": 400, "type": {"kind": "named", "name": "sample::Result"},
+        }]
+        document = convert(self.ir)
+        response = document["paths"]["/results/{id}"]["get"]["responses"]["400"]
+        self.assertEqual(response["content"]["application/json"]["schema"], {
+            "anyOf": [
+                {"$ref": "#/components/schemas/Result"},
+                {"$ref": "#/components/schemas/RigInvalidRequest"},
+            ],
+        })
+
     def test_unbound_path_is_rejected(self):
         self.ir["operations"][0]["parameters"] = []
         with self.assertRaisesRegex(ValueError, "unbound placeholders"):

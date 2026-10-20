@@ -12,7 +12,7 @@ assert {entry["cpp_name"] for entry in ir["operations"]} == {
 }
 document = json.loads(Path("build/openapi.json").read_text())
 schemas = document["components"]["schemas"]
-assert set(schemas) == {"left.Result", "right.Result", "Pair"}
+assert set(schemas) == {"left.Result", "right.Result", "Pair", "RigInvalidRequest"}
 assert schemas["Pair"]["properties"] == {
     "left": {"$ref": "#/components/schemas/left.Result"},
     "right": {"$ref": "#/components/schemas/right.Result"},
@@ -21,6 +21,9 @@ assert document["paths"]["/left"]["get"]["operationId"] == "left.read"
 assert document["paths"]["/left/new"]["get"]["operationId"] == "newest"
 assert document["paths"]["/right"]["get"]["operationId"] == "right.read"
 checked = document["paths"]["/checked"]["post"]["responses"]
+assert checked["400"]["content"]["application/json"]["schema"] == {
+    "$ref": "#/components/schemas/RigInvalidRequest"
+}
 assert checked["422"]["content"]["application/json"]["schema"] == {
     "$ref": "#/components/schemas/left.Result"
 }

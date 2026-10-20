@@ -127,6 +127,17 @@ def route_priority(operation):
     return tuple(kind for kind, _ in route_segments(operation["path"], parameters))
 
 
+def request_needs_decoding(operation):
+    """Whether route input can fail conversion before calling the operation."""
+    parameters = {item["name"]: item for item in operation["parameters"]}
+    _, captures = route_pattern(operation["path"], parameters)
+    return any(
+        item["name"] not in captures or
+        item["type"] == {"kind": "builtin", "name": "int"}
+        for item in operation["parameters"]
+    )
+
+
 def _segments_overlap(left, right):
     if len(left) != len(right):
         return False

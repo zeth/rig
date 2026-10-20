@@ -4,6 +4,10 @@
 #include <cassert>
 
 int main() {
+    const auto oversized = rig_http::dispatch("GET", "/games/999999999999999999999", "");
+    assert(oversized && oversized->status == 400);
+    assert(oversized->body["code"] == "invalid_request");
+
     auto& game = dodger::game_instance();
     game.set_action(1, {dodger::Move::Stay, false});
     game.set_action(2, {dodger::Move::Stay, false});

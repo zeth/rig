@@ -94,12 +94,8 @@ Request read_request(int client) {
 }
 
 rig_http::response dispatch(const Request& request) {
-    try {
-        if (auto response = rig_http::dispatch(request.method, request.path, request.body))
-            return *response;
-    } catch (const std::invalid_argument& error) {
-        throw HttpError(400, error.what());
-    }
+    if (auto response = rig_http::dispatch(request.method, request.path, request.body))
+        return *response;
     throw HttpError(404, "route not found");
 }
 

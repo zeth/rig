@@ -31,16 +31,29 @@ def generate(ir, codec_header):
         "// Generated from RIG IR; do not edit.",
         "#pragma once",
         f'#include "{codec_header}"',
+        "#include <charconv>",
         "#include <optional>",
         "#include <regex>",
         "#include <stdexcept>",
         "#include <string>",
+        "#include <system_error>",
         "#include <type_traits>",
+        "#include <utility>",
         "#include <variant>",
         "",
         "namespace rig_http {",
         "using json = nlohmann::json;",
         "struct response { int status; json body; };",
+        "inline response invalid_request(const std::string& message) {",
+        '    return {400, json{{"code", "invalid_request"}, {"message", message}}};',
+        "}",
+        "inline int decode_path_int(const std::string& input) {",
+        "    int value;",
+        "    const auto [end, error] = std::from_chars(input.data(), input.data() + input.size(), value);",
+        "    if (error != std::errc{} || end != input.data() + input.size())",
+        '        throw std::invalid_argument("invalid integer path parameter");',
+        "    return value;",
+        "}",
         "template <typename T> T decode_body(const std::string& body) {",
         "    try {",
         "        return rig_json::decode<T>(json::parse(body));",
@@ -69,15 +82,28 @@ def generate(ir, codec_header):
             f'    if (method == "{operation["method"]}" && std::regex_match(path, match, route_{index})) {{',
         ]
         arguments = []
-        for parameter in operation["parameters"]:
+        decodes = []
+        for position, parameter in enumerate(operation["parameters"]):
             param_name = identifier(parameter["name"])
             param_type = cpp_type(parameter["type"])
             if param_name in captures:
                 value = f"match[{captures[param_name]}].str()"
-                value = f"std::stoi({value})" if param_type == "int" else value
+                value = f"decode_path_int({value})" if param_type == "int" else value
             else:
                 value = f"decode_body<{param_type}>(body)"
-            arguments.append(value)
+            lines.append(f"        std::optional<{param_type}> argument_{position};")
+            decodes.append(f"            argument_{position}.emplace({value});")
+            arguments.append(f"std::move(*argument_{position})")
+        if decodes:
+            lines += [
+                "        try {",
+                *decodes,
+                "        } catch (const std::invalid_argument& error) {",
+                "            return invalid_request(error.what());",
+                "        } catch (const std::out_of_range& error) {",
+                "            return invalid_request(error.what());",
+                "        }",
+            ]
         call = f"{operation['cpp_name']}({', '.join(arguments)})"
         if operation.get("errors"):
             success = cpp_type(operation["returns"])
