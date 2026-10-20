@@ -2,7 +2,7 @@
 
 import re
 
-from .ir import public_names, request_needs_decoding, validate
+from .ir import public_names, query_value_type, request_needs_decoding, validate
 
 
 PRIMITIVES = {
@@ -89,8 +89,8 @@ def convert(ir, title="API", version="0.1.0"):
                 parameters.append({
                     "name": name,
                     "in": "query",
-                    "required": True,
-                    "schema": schema(parameter["type"]),
+                    "required": parameter["type"]["kind"] != "optional",
+                    "schema": schema(query_value_type(parameter["type"])),
                 })
             else:
                 bodies.append(parameter)

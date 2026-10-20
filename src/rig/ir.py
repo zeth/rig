@@ -132,6 +132,11 @@ def request_needs_decoding(operation):
     return bool(operation["parameters"])
 
 
+def query_value_type(ref):
+    """Return the scalar type used for a required or optional query value."""
+    return ref["value"] if ref["kind"] == "optional" else ref
+
+
 def _segments_overlap(left, right):
     if len(left) != len(right):
         return False
@@ -245,8 +250,8 @@ def validate(document):
             if "in" in parameter:
                 if parameter["in"] != "query":
                     raise ValueError(f"{parameter_location}.in: unsupported parameter location")
-                if parameter["type"]["kind"] != "builtin":
-                    raise ValueError(f"{parameter_location}: query parameter must be scalar")
+                if query_value_type(parameter["type"])["kind"] != "builtin":
+                    raise ValueError(f"{parameter_location}: query parameter must be scalar or optional scalar")
             by_name[parameter_name] = parameter
         type_ref(operation["returns"], f"{location}.returns")
         path = operation["path"]

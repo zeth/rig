@@ -3,7 +3,7 @@
 import json
 import re
 
-from .ir import identifier, route_pattern, route_priority, validate
+from .ir import identifier, query_value_type, route_pattern, route_priority, validate
 
 
 def generate(ir, codec_header):
@@ -158,22 +158,33 @@ def generate(ir, codec_header):
         for position, parameter in enumerate(operation["parameters"]):
             param_name = identifier(parameter["name"])
             param_type = cpp_type(parameter["type"])
+            lines.append(f"        std::optional<{param_type}> argument_{position};")
             if param_name in captures:
                 value = f"match[{captures[param_name]}].str()"
                 value = (f"decode_path_int({value})" if param_type == "int"
                          else f"decode_path_string({value})")
             elif parameter.get("in") == "query":
+                decodes.append(
+                    f'            const auto query_{position} = query_values.find("{param_name}");'
+                )
+                decoder = {"int": "decode_query_int", "bool": "decode_query_bool",
+                           "std::string": "std::string"}[cpp_type(query_value_type(parameter["type"]))]
+                value = f"{decoder}(query_{position}->second)"
+                if parameter["type"]["kind"] == "optional":
+                    decodes += [
+                        f"            if (query_{position} == query_values.end())",
+                        f"                argument_{position}.emplace(std::nullopt);",
+                        "            else",
+                        f"                argument_{position}.emplace({value});",
+                    ]
+                    arguments.append(f"std::move(*argument_{position})")
+                    continue
                 decodes += [
-                    f'            const auto query_{position} = query_values.find("{param_name}");',
                     f"            if (query_{position} == query_values.end())",
                     f'                throw std::invalid_argument("missing query parameter: {param_name}");',
                 ]
-                decoder = {"int": "decode_query_int", "bool": "decode_query_bool",
-                           "std::string": "std::string"}[param_type]
-                value = f"{decoder}(query_{position}->second)"
             else:
                 value = f"decode_body<{param_type}>(body)"
-            lines.append(f"        std::optional<{param_type}> argument_{position};")
             decodes.append(f"            argument_{position}.emplace({value});")
             arguments.append(f"std::move(*argument_{position})")
         if decodes:

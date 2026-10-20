@@ -12,6 +12,13 @@ left::Result left::query(std::string text, bool enabled) {
     const int value = text == "a b" ? 1 : text == "a&b" ? 2 : 0;
     return {enabled ? value : -value};
 }
+left::Result left::filter(std::optional<int> limit, std::optional<bool> enabled,
+                          std::optional<std::string> text) {
+    int value = limit.value_or(0);
+    if (enabled) value += *enabled ? 100 : 200;
+    if (text) value += *text == "a b" ? 1000 : 2000;
+    return {value};
+}
 right::Result right::read() { return {"seven"}; }
 service::Pair service::echo(Pair pair) { return pair; }
 rig::result<service::Pair, rig::error<422, left::Result>, rig::error<503, right::Result>>
@@ -41,6 +48,12 @@ int main() {
     const auto query_text = rig_http::dispatch("GET", "/left/query?text=a+b&enabled=true", "");
     const auto query_false = rig_http::dispatch("GET", "/left/query?text=a%26b&enabled=false", "");
     const auto invalid_bool = rig_http::dispatch("GET", "/left/query?text=a&enabled=yes", "");
+    const auto filter_omitted = rig_http::dispatch("GET", "/left/filter", "");
+    const auto filter_supplied = rig_http::dispatch(
+        "GET", "/left/filter?limit=7&enabled=false&text=a+b", "");
+    const auto filter_empty_text = rig_http::dispatch("GET", "/left/filter?text=", "");
+    const auto filter_invalid = rig_http::dispatch("GET", "/left/filter?limit=no", "");
+    const auto filter_bad_bool = rig_http::dispatch("GET", "/left/filter?enabled=yes", "");
     const auto right = rig_http::dispatch("GET", "/right", "");
     const auto pair = rig_http::dispatch(
         "POST", "/pairs", R"({"left":{"value":7},"right":{"value":"seven"}})");
@@ -75,6 +88,16 @@ int main() {
     assert(query_false && query_false->status == 200 && query_false->body["value"] == -2);
     assert(invalid_bool && invalid_bool->status == 400 &&
            invalid_bool->body["code"] == "invalid_request");
+    assert(filter_omitted && filter_omitted->status == 200 &&
+           filter_omitted->body["value"] == 0);
+    assert(filter_supplied && filter_supplied->status == 200 &&
+           filter_supplied->body["value"] == 1207);
+    assert(filter_empty_text && filter_empty_text->status == 200 &&
+           filter_empty_text->body["value"] == 2000);
+    assert(filter_invalid && filter_invalid->status == 400 &&
+           filter_invalid->body["code"] == "invalid_request");
+    assert(filter_bad_bool && filter_bad_bool->status == 400 &&
+           filter_bad_bool->body["code"] == "invalid_request");
     assert(right && right->status == 200 && right->body["value"] == "seven");
     assert(pair && pair->status == 200 && pair->body["left"]["value"] == 7 &&
            pair->body["right"]["value"] == "seven");

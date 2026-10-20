@@ -2,6 +2,7 @@
 
 #include <rig/route.hpp>
 #include <rig/result.hpp>
+#include <optional>
 #include <string>
 
 namespace left {
@@ -11,6 +12,9 @@ RIG_ROUTE(GET, "/left/{key}") Result by_key(std::string key);
 RIG_ROUTE(GET, "/left/new") Result newest();
 RIG_ROUTE(GET, "/left/limited") Result limited(int limit RIG_QUERY);
 RIG_ROUTE(GET, "/left/query") Result query(std::string text RIG_QUERY, bool enabled RIG_QUERY);
+RIG_ROUTE(GET, "/left/filter") Result filter(std::optional<int> limit RIG_QUERY,
+                                              std::optional<bool> enabled RIG_QUERY,
+                                              std::optional<std::string> text RIG_QUERY);
 }
 
 namespace right {

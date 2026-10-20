@@ -87,6 +87,20 @@ class IRValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "query parameter must be scalar"):
             validate(self.ir)
 
+    def test_optional_query_parameter_must_contain_scalar(self):
+        operation = self.ir["operations"][0]
+        operation["path"] = "/items"
+        operation["parameters"][0] = {
+            "name": "filter", "in": "query",
+            "type": {"kind": "optional", "value": {
+                "kind": "named", "name": "sample::Item",
+            }},
+        }
+        with self.assertRaisesRegex(ValueError, "query parameter must be scalar"):
+            validate(self.ir)
+        operation["parameters"][0]["type"]["value"] = {"kind": "builtin", "name": "int"}
+        self.assertIs(validate(self.ir), self.ir)
+
     def test_same_short_type_name_in_another_namespace_is_valid(self):
         other = copy.deepcopy(self.ir["types"][0])
         other["cpp_name"] = "other::Item"

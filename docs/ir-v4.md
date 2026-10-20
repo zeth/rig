@@ -72,10 +72,13 @@ Paths start with `/` and contain literal segments or whole-segment `{name}`
 placeholders. Literals use ASCII letters, digits, `.`, `_`, `~`, and `-`.
 A placeholder must name exactly one parameter of type `int` or `string`.
 Parameters annotated `RIG_QUERY` after their C++ name have `"in": "query"`
-in IR. Required query parameters support scalar `int`, `bool`, and
-`std::string` values. Other parameters form the JSON request body; at most one
-is allowed. For example, `list_items(int limit RIG_QUERY)` takes `limit` from
-`?limit=10`. `GET` and `DELETE` cannot have a body under the current convention.
+in IR. Query parameters support scalar `int`, `bool`, and `std::string` values.
+`std::optional<T>` for one of these scalars makes it omittable: dispatch passes
+`std::nullopt`, and OpenAPI sets `required` to false with the scalar schema.
+Other parameters form the JSON request body; at most one is allowed. For
+example, `list_items(std::optional<int> limit RIG_QUERY)` accepts both `/items`
+and `/items?limit=10`. `GET` and `DELETE` cannot have a body under the current
+convention.
 These rules are shared by OpenAPI and the C++20 HTTP dispatch generator.
 For the same method, literal segments take precedence over placeholders, and
 integer placeholders take precedence over string placeholders. Parameterized
@@ -102,8 +105,8 @@ percent escapes in string path parameters after matching path segments, so an
 encoded slash stays within its parameter. A plus sign remains a plus sign.
 Malformed percent escapes in a matched string parameter return HTTP 400.
 For declared query parameters, dispatch decodes percent escapes and maps `+`
-to space. Missing, duplicate, or invalid query values return HTTP 400. Extra
-query parameters are ignored when their names are unique.
+to space. Missing required values, duplicate names, or invalid values return
+HTTP 400. Extra query parameters are ignored when their names are unique.
 
 When a route converts a path or query parameter or decodes a JSON body, RIG
 also declares an HTTP 400 response for invalid input. Its body has

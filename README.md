@@ -91,7 +91,7 @@ RIG_ROUTE(GET, "/items/{id}")
 rig::result<Item, rig::error<404, ErrorResponse>> get_item(ItemId id);
 
 RIG_ROUTE(GET, "/items")
-ItemList list_items(int limit RIG_QUERY);
+ItemList list_items(std::optional<int> limit RIG_QUERY);
 
 RIG_ROUTE(POST, "/items")
 Item create_item(CreateItemRequest request);
@@ -137,8 +137,9 @@ Run `rig validate < rig.json` to check the shared IR contract without generating
 output. See [IR version 4](docs/ir-v4.md) for its format and current rules.
 
 Current conventions are intentionally small: a parameter named in the route
-is a path parameter; `RIG_QUERY` after a scalar parameter name marks a required
-query parameter; one remaining unmarked parameter becomes a JSON request body;
+is a path parameter; `RIG_QUERY` after a scalar parameter name marks a query
+parameter, required unless its type is `std::optional<T>`; one remaining
+unmarked parameter becomes a JSON request body;
 registered record fields are required; a successful operation returns
 HTTP 200 with a JSON body; and `rig::result<Success, rig::error<Status, Body>...>`
 declares operation errors. The generated HTTP dispatcher returns the chosen

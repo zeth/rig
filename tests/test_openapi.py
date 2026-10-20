@@ -63,6 +63,19 @@ class ConversionTests(unittest.TestCase):
         self.assertIn("400", operation["responses"])
         self.assertNotIn("requestBody", operation)
 
+    def test_optional_query_parameter_is_not_required_or_nullable(self):
+        self.ir["operations"][0]["path"] = "/results"
+        self.ir["operations"][0]["parameters"] = [{
+            "name": "limit", "in": "query",
+            "type": {"kind": "optional", "value": {"kind": "builtin", "name": "int"}},
+        }]
+        operation = convert(self.ir)["paths"]["/results"]["get"]
+        self.assertEqual(operation["parameters"], [{
+            "name": "limit", "in": "query", "required": False,
+            "schema": {"type": "integer"},
+        }])
+        self.assertIn("400", operation["responses"])
+
     def test_declared_400_and_generated_invalid_request_share_response(self):
         self.ir["operations"][0]["errors"] = [{
             "status": 400, "type": {"kind": "named", "name": "sample::Result"},
