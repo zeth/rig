@@ -7,6 +7,8 @@ from .ir import public_names, query_value_type, request_needs_decoding, validate
 
 PRIMITIVES = {
     "int": {"type": "integer"},
+    "int64": {"type": "integer", "format": "int64"},
+    "double": {"type": "number", "format": "double"},
     "bool": {"type": "boolean"},
     "string": {"type": "string"},
 }
@@ -54,18 +56,28 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         name = schema_names[qualified]
         if entry["kind"] == "record":
             properties = {}
+            required = []
             for field in entry["fields"]:
-                property_schema = schema(field["type"])
+                ref = field["type"]
+                if field.get("omit_empty") or field.get("nullable"):
+                    ref = ref["value"]
+                if field.get("omit_empty") and field.get("nullable"):
+                    ref = ref["value"]
+                property_schema = schema(ref)
+                if field.get("nullable"):
+                    property_schema["type"] = [property_schema["type"], "null"]
                 if "bool_value" in field:
                     property_schema["enum"] = [field["bool_value"]]
                 for key in ("description", "minimum"):
                     if key in field:
                         property_schema[key] = field[key]
                 properties[field["name"]] = property_schema
+                if not field.get("omit_empty"):
+                    required.append(field["name"])
             record_schema = {
                 "type": "object",
                 "properties": properties,
-                "required": list(properties),
+                "required": required,
             }
             if not entry.get("open", False):
                 record_schema["additionalProperties"] = False

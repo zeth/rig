@@ -7,7 +7,7 @@ from rig.openapi import convert
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 10,
+            "ir_version": 11,
             "types": [{
                 "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
@@ -63,6 +63,29 @@ class ConversionTests(unittest.TestCase):
         self.assertNotIn("400", operation["responses"])
         with self.assertRaisesRegex(ValueError, "cannot supply context parameters"):
             generate_routes(self.ir, "codec.hpp")
+
+    def test_omittable_nullable_and_numeric_fields(self):
+        self.ir["types"][0]["fields"].extend([
+            {"name": "updated_at", "type": {"kind": "builtin", "name": "int64"}},
+            {"name": "percent", "type": {"kind": "builtin", "name": "double"}},
+            {"name": "label", "type": {"kind": "optional", "value": {
+                "kind": "builtin", "name": "string"}}, "omit_empty": True},
+            {"name": "error", "type": {"kind": "optional", "value": {
+                "kind": "builtin", "name": "string"}}, "nullable": True},
+            {"name": "maybe_error", "type": {"kind": "optional", "value": {
+                "kind": "optional", "value": {"kind": "builtin", "name": "string"}}},
+             "omit_empty": True, "nullable": True},
+        ])
+        result = convert(self.ir)["components"]["schemas"]["Result"]
+        self.assertEqual(result["required"], ["ok", "updated_at", "percent", "error"])
+        self.assertEqual(result["properties"]["updated_at"],
+                         {"type": "integer", "format": "int64"})
+        self.assertEqual(result["properties"]["percent"],
+                         {"type": "number", "format": "double"})
+        self.assertEqual(result["properties"]["label"], {"type": "string"})
+        self.assertEqual(result["properties"]["error"], {"type": ["string", "null"]})
+        self.assertEqual(result["properties"]["maybe_error"],
+                         {"type": ["string", "null"]})
 
     def test_open_record_and_omitted_operation_id(self):
         self.ir["types"][0]["open"] = True

@@ -16,7 +16,8 @@ def generate(ir, api_header):
         kind = ref["kind"]
         if kind == "builtin":
             try:
-                return {"int": "int", "bool": "bool", "string": "std::string"}[ref["name"]]
+                return {"int": "int", "int64": "long long", "double": "double",
+                        "bool": "bool", "string": "std::string"}[ref["name"]]
             except KeyError:
                 raise ValueError(f"unsupported builtin type: {ref['name']}") from None
         if kind == "named":
@@ -66,6 +67,23 @@ def generate(ir, api_header):
         "    static bool decode(const json& value) {",
         '        if (!value.is_boolean()) throw std::invalid_argument("expected bool");',
         "        return value.get<bool>();",
+        "    }",
+        "};",
+        "template <> struct codec<long long> {",
+        "    static json encode(long long value) { return value; }",
+        "    static long long decode(const json& value) {",
+        '        if (!value.is_number_integer()) throw std::invalid_argument("expected int64");',
+        "        if (value.is_number_unsigned() &&",
+        "            value.get<std::uint64_t>() > static_cast<std::uint64_t>(std::numeric_limits<long long>::max()))",
+        '            throw std::invalid_argument("int64 out of range");',
+        "        return value.get<long long>();",
+        "    }",
+        "};",
+        "template <> struct codec<double> {",
+        "    static json encode(double value) { return value; }",
+        "    static double decode(const json& value) {",
+        '        if (!value.is_number()) throw std::invalid_argument("expected double");',
+        "        return value.get<double>();",
         "    }",
         "};",
         "template <> struct codec<std::string> {",
@@ -129,9 +147,16 @@ def generate(ir, api_header):
                         f'    if (value.{field_name} != {str(field["bool_value"]).lower()}) '
                         f'throw std::invalid_argument("invalid {field_name}");'
                     )
-                lines.append(
-                    f'    result["{field_name}"] = codec<{cpp_type(field["type"])}>::encode(value.{field_name});'
+                assignment = (
+                    f'    result["{field_name}"] = '
+                    f'codec<{cpp_type(field["type"])}>::encode(value.{field_name});'
                 )
+                if field.get("omit_empty"):
+                    lines.append(f"    if (value.{field_name}) {{")
+                    lines.append("    " + assignment)
+                    lines.append("    }")
+                else:
+                    lines.append(assignment)
             lines.append("    return result;")
         lines += ["}", f"inline {qualified} codec<{qualified}>::decode(const json& value) {{"]
         if entry["kind"] == "enum":
@@ -140,11 +165,17 @@ def generate(ir, api_header):
                 lines.append(f'    if (value == "{value}") return {qualified}::{value};')
             lines.append(f'    throw std::invalid_argument("unknown {name}");')
         else:
-            size_check = "" if entry.get("open", False) else f" || value.size() != {len(fields)}"
-            lines.append(f'    if (!value.is_object(){size_check}')
+            lines.append('    if (!value.is_object()')
             for field in fields:
-                lines.append(f'        || !value.contains("{field["name"]}")')
+                if not field.get("omit_empty"):
+                    lines.append(f'        || !value.contains("{field["name"]}")')
             lines.append(f') throw std::invalid_argument("expected {name}");')
+            if not entry.get("open", False):
+                allowed = " && ".join(
+                    f'it.key() != "{field["name"]}"' for field in fields
+                ) or "true"
+                lines.append("    for (auto it = value.begin(); it != value.end(); ++it)")
+                lines.append(f'        if ({allowed}) throw std::invalid_argument("unexpected {name} field");')
             for field in fields:
                 if "bool_value" in field:
                     lines.append(
@@ -153,9 +184,14 @@ def generate(ir, api_header):
                     )
             lines.append(f"    return {qualified}{{")
             for field in fields:
-                lines.append(
-                    f'        codec<{cpp_type(field["type"])}>::decode(value.at("{field["name"]}")),'
-                )
+                decoded = f'codec<{cpp_type(field["type"])}>::decode(value.at("{field["name"]}"))'
+                if field.get("omit_empty") and field.get("nullable"):
+                    inner_type = cpp_type(field["type"]["value"])
+                    decoded = (f'std::optional<{inner_type}>{{std::in_place, '
+                               f'codec<{inner_type}>::decode(value.at("{field["name"]}"))}}')
+                if field.get("omit_empty"):
+                    decoded = f'value.contains("{field["name"]}") ? {decoded} : std::nullopt'
+                lines.append(f'        {decoded},')
             lines.append("    };")
         lines += ["}", ""]
 

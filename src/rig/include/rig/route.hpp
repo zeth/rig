@@ -14,6 +14,8 @@ struct context {};
 struct range { int minimum; int maximum; };
 struct minimum { int value; };
 struct field_description { char text[256]; };
+struct omit_empty {};
+struct nullable {};
 struct summary { char text[256]; };
 struct description { char text[2048]; };
 struct response_description { char text[256]; };
@@ -34,6 +36,8 @@ struct error_response {
 #define RIG_RANGE(minimum, maximum) [[=::rig::range{minimum, maximum}]]
 #define RIG_MINIMUM(value) [[=::rig::minimum{value}]]
 #define RIG_FIELD_DESCRIPTION(text) [[=::rig::field_description{text}]]
+#define RIG_OMIT_EMPTY [[=::rig::omit_empty{}]]
+#define RIG_NULLABLE [[=::rig::nullable{}]]
 #define RIG_SUMMARY(text) [[=::rig::summary{text}]]
 #define RIG_DESCRIPTION(text) [[=::rig::description{text}]]
 #define RIG_RESPONSE_DESCRIPTION(text) [[=::rig::response_description{text}]]
@@ -51,6 +55,8 @@ struct error_response {
 #define RIG_RANGE(minimum, maximum)
 #define RIG_MINIMUM(value)
 #define RIG_FIELD_DESCRIPTION(text)
+#define RIG_OMIT_EMPTY
+#define RIG_NULLABLE
 #define RIG_SUMMARY(text)
 #define RIG_DESCRIPTION(text)
 #define RIG_RESPONSE_DESCRIPTION(text)

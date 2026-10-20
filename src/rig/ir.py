@@ -1,11 +1,11 @@
-"""Validation and shared route rules for RIG IR version 10."""
+"""Validation and shared route rules for RIG IR version 11."""
 
 import re
 from collections import Counter
 
 
-VERSION = 10
-BUILTINS = {"int", "bool", "string"}
+VERSION = 11
+BUILTINS = {"int", "int64", "double", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
 PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z_0-9]*)\}\Z")
@@ -209,7 +209,8 @@ def validate(document):
             member_location = f"{location}.{member_key}[{member_index}]"
             if kind == "record":
                 member = _object(member, member_location, ("name", "type"),
-                                 ("bool_value", "description", "minimum"))
+                                 ("bool_value", "description", "minimum",
+                                  "omit_empty", "nullable"))
                 member_name = _name(member["name"], f"{member_location}.name")
                 if "bool_value" in member:
                     if type(member["bool_value"]) is not bool or member["type"] != {
@@ -223,6 +224,21 @@ def validate(document):
                         "kind": "builtin", "name": "int"
                     }:
                         raise ValueError(f"{member_location}.minimum: requires an int field")
+                for option in ("omit_empty", "nullable"):
+                    if option in member:
+                        ref = member["type"]
+                        if member[option] is not True or not isinstance(ref, dict) or (
+                            ref.get("kind") != "optional"
+                        ):
+                            raise ValueError(f"{member_location}.{option}: requires an optional field")
+                if "nullable" in member:
+                    inner = member["type"].get("value")
+                    if "omit_empty" in member:
+                        if not isinstance(inner, dict) or inner.get("kind") != "optional":
+                            raise ValueError(f"{member_location}: omittable nullable requires nested optional")
+                        inner = inner.get("value")
+                    if not isinstance(inner, dict) or inner.get("kind") != "builtin":
+                        raise ValueError(f"{member_location}.nullable: requires an optional builtin")
                 label = "field"
             else:
                 member_name = _name(member, member_location)
@@ -306,7 +322,10 @@ def validate(document):
             if "in" in parameter:
                 if parameter["in"] != "query":
                     raise ValueError(f"{parameter_location}.in: unsupported parameter location")
-                if query_value_type(parameter["type"])["kind"] != "builtin":
+                query_ref = query_value_type(parameter["type"])
+                if query_ref["kind"] != "builtin" or query_ref["name"] not in {
+                    "int", "bool", "string"
+                }:
                     raise ValueError(f"{parameter_location}: query parameter must be scalar or optional scalar")
             by_name[parameter_name] = parameter
         type_ref(operation["returns"], f"{location}.returns")

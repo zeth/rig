@@ -10,7 +10,7 @@ from rig.openapi import convert
 
 
 VALID = {
-    "ir_version": 10,
+    "ir_version": 11,
     "types": [
         {"kind": "record", "name": "Item", "cpp_name": "sample::Item", "fields": [
             {"name": "id", "type": {"kind": "builtin", "name": "int"}},

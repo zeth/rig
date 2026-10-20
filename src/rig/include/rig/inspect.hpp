@@ -47,6 +47,8 @@ consteval bool contains_type(const std::vector<std::meta::info>& types,
 consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& types) {
     type = std::meta::remove_cvref(type);
     if (std::meta::is_same_type(type, ^^int) ||
+        std::meta::is_same_type(type, ^^long long) ||
+        std::meta::is_same_type(type, ^^double) ||
         std::meta::is_same_type(type, ^^bool) ||
         std::meta::is_same_type(type, ^^std::string)) return;
 
@@ -186,6 +188,10 @@ void emit_type(std::ostream& output) {
     constexpr auto type = std::meta::remove_cvref(Type);
     if constexpr (std::meta::is_same_type(type, ^^int)) {
         output << "{\"kind\":\"builtin\",\"name\":\"int\"}";
+    } else if constexpr (std::meta::is_same_type(type, ^^long long)) {
+        output << "{\"kind\":\"builtin\",\"name\":\"int64\"}";
+    } else if constexpr (std::meta::is_same_type(type, ^^double)) {
+        output << "{\"kind\":\"builtin\",\"name\":\"double\"}";
     } else if constexpr (std::meta::is_same_type(type, ^^bool)) {
         output << "{\"kind\":\"builtin\",\"name\":\"bool\"}";
     } else if constexpr (std::meta::is_same_type(type, ^^std::string)) {
@@ -261,6 +267,25 @@ void emit_record(std::ostream& output) {
                           "RIG_MINIMUM requires an int field");
             constexpr auto value = [:std::meta::constant_of(minimums[0]):];
             output << ",\"minimum\":" << value.value;
+        }
+        constexpr auto omit_empty = std::define_static_array(
+            std::meta::annotations_of_with_type(field, ^^rig::omit_empty));
+        constexpr auto nullable = std::define_static_array(
+            std::meta::annotations_of_with_type(field, ^^rig::nullable));
+        static_assert(omit_empty.size() <= 1 && nullable.size() <= 1,
+                      "RIG optional field annotations may appear once");
+        if constexpr (omit_empty.size() == 1 || nullable.size() == 1) {
+            static_assert(std::meta::has_template_arguments(std::meta::type_of(field)) &&
+                          std::meta::template_of(std::meta::type_of(field)) == ^^std::optional,
+                          "RIG omittable and nullable fields require std::optional");
+            if constexpr (omit_empty.size() == 1) output << ",\"omit_empty\":true";
+            if constexpr (nullable.size() == 1) output << ",\"nullable\":true";
+            if constexpr (omit_empty.size() == 1 && nullable.size() == 1) {
+                constexpr auto inner = std::meta::template_arguments_of(std::meta::type_of(field))[0];
+                static_assert(std::meta::has_template_arguments(inner) &&
+                              std::meta::template_of(inner) == ^^std::optional,
+                              "omittable nullable fields require nested std::optional");
+            }
         }
         output << '}';
     }
@@ -478,7 +503,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":10,\"types\":[";
+        output_ << "{\"ir_version\":11,\"types\":[";
     }
 
     template <std::meta::info Type>

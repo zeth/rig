@@ -17,7 +17,8 @@ def generate(ir, codec_header):
 
     def cpp_type(ref):
         if ref["kind"] == "builtin":
-            return {"int": "int", "bool": "bool", "string": "std::string"}[ref["name"]]
+            return {"int": "int", "int64": "long long", "double": "double",
+                    "bool": "bool", "string": "std::string"}[ref["name"]]
         if ref["kind"] == "named":
             name = ref["name"]
             if name not in names:

@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from rig.json_codec import generate as generate_codec
+
 
 class InspectorTests(unittest.TestCase):
     def run_inspect(self, directory, *arguments):
@@ -15,6 +17,55 @@ class InspectorTests(unittest.TestCase):
             cwd=directory, text=True, capture_output=True,
         )
 
+    def test_codec_preserves_omitted_and_null_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "api.hpp").write_text(
+                '#include <optional>\n#include <string>\n'
+                'namespace sample { struct Item { long long count; double percent; '
+                'std::optional<std::string> label; '
+                'std::optional<std::optional<std::string>> error; }; }\n'
+            )
+            string = {"kind": "builtin", "name": "string"}
+            optional_string = {"kind": "optional", "value": string}
+            ir = {"ir_version": 11, "types": [{
+                "kind": "record", "name": "Item", "cpp_name": "sample::Item",
+                "fields": [
+                    {"name": "count", "type": {"kind": "builtin", "name": "int64"}},
+                    {"name": "percent", "type": {"kind": "builtin", "name": "double"}},
+                    {"name": "label", "type": optional_string, "omit_empty": True},
+                    {"name": "error", "type": {"kind": "optional", "value": optional_string},
+                     "omit_empty": True, "nullable": True},
+                ],
+            }], "operations": []}
+            (root / "codec.hpp").write_text(generate_codec(ir, "api.hpp"))
+            (root / "check.cpp").write_text(
+                '#include "codec.hpp"\n'
+                'int main() {\n'
+                '  sample::Item item{42, 0.5, std::nullopt, '
+                'std::optional<std::optional<std::string>>{std::in_place, std::nullopt}};\n'
+                '  auto value = rig_json::encode(item);\n'
+                '  if (value.contains("label") || !value.at("error").is_null()) return 1;\n'
+                '  auto decoded = rig_json::decode<sample::Item>(value);\n'
+                '  if (decoded.count != 42 || decoded.percent != 0.5 || '
+                'decoded.label || !decoded.error || *decoded.error) return 2;\n'
+                '  value.erase("error");\n'
+                '  if (rig_json::decode<sample::Item>(value).error) return 3;\n'
+                '  value["extra"] = 1;\n'
+                '  try { (void)rig_json::decode<sample::Item>(value); return 4; }\n'
+                '  catch (const std::invalid_argument&) {}\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = root / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", f"-I{include_dir}", "-I.", "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_compiles_with_forwarded_include_flag(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -22,9 +73,13 @@ class InspectorTests(unittest.TestCase):
             header.parent.mkdir(parents=True)
             header.write_text(
                 '#include <rig/route.hpp>\n'
+                '#include <optional>\n#include <string>\n'
                 'namespace sample {\n'
                 'struct Context;\n'
-                'struct Item { int value RIG_MINIMUM(1) RIG_FIELD_DESCRIPTION("Count"); };\n'
+                'struct Item { int value RIG_MINIMUM(1) RIG_FIELD_DESCRIPTION("Count"); '
+                'long long updated_at; double percent; '
+                'std::optional<std::string> label RIG_OMIT_EMPTY; '
+                'std::optional<std::string> error RIG_NULLABLE; };\n'
                 'RIG_ROUTE(GET, "/items/{id}") Item get_item(Context& context RIG_CONTEXT, int id);\n'
                 'RIG_ROUTE(GET, "/items") Item list_items(int limit RIG_QUERY RIG_RANGE(1, 20));\n'
                 '}\n'
@@ -39,7 +94,7 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 10)
+            self.assertEqual(ir["ir_version"], 11)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["operations"][0]["context_parameters"], ["context"])
             self.assertEqual([p["name"] for p in ir["operations"][0]["parameters"]], ["id"])
@@ -49,6 +104,10 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["types"][0]["fields"][0]["name"], "value")
             self.assertEqual(ir["types"][0]["fields"][0]["minimum"], 1)
             self.assertEqual(ir["types"][0]["fields"][0]["description"], "Count")
+            self.assertEqual(ir["types"][0]["fields"][1]["type"]["name"], "int64")
+            self.assertEqual(ir["types"][0]["fields"][2]["type"]["name"], "double")
+            self.assertTrue(ir["types"][0]["fields"][3]["omit_empty"])
+            self.assertTrue(ir["types"][0]["fields"][4]["nullable"])
             generated = self.run_inspect(
                 root, "--header", "sample/api.hpp", "--namespace", "sample",
                 "--", "-Iinclude",
