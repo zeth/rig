@@ -19,6 +19,7 @@ class ConversionTests(unittest.TestCase):
                 "path": "/results/{id}",
                 "parameters": [{"name": "id", "type": {"kind": "builtin", "name": "int"}}],
                 "returns": {"kind": "named", "name": "sample::Result"},
+                "result": False,
             }],
         }
 

@@ -494,6 +494,7 @@ void emit_operation(std::ostream& output) {
     } else {
         emit_type<return_type>(output);
     }
+    output << ",\"result\":" << (is_result_type(return_type) ? "true" : "false");
     output << ",\"errors\":[";
     first = true;
     if constexpr (is_result_type(return_type)) {

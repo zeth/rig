@@ -155,6 +155,7 @@ def generate(ir, codec_header):
             "        std::string_view(path).substr(query_start + 1);",
         ]
     lines.append("    std::smatch match;")
+    lines.append("    (void)body;")
 
     # Validated overlapping routes have a strict specificity order. Keep IR
     # order for routes with the same priority or disjoint match sets.
@@ -231,7 +232,7 @@ def generate(ir, codec_header):
                 "        }",
             ]
         call = f"{operation['cpp_name']}({', '.join(arguments)})"
-        if operation.get("errors"):
+        if operation["result"]:
             success = cpp_type(operation["returns"])
             lines += [
                 f"        const auto outcome = {call};",

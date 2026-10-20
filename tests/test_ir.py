@@ -23,6 +23,7 @@ VALID = {
         "name": "get_item", "cpp_name": "sample::get_item", "method": "GET", "path": "/items/{id}",
         "parameters": [{"name": "id", "type": {"kind": "builtin", "name": "int"}}],
         "returns": {"kind": "named", "name": "sample::Item"},
+        "result": True,
         "errors": [{"status": 404, "type": {"kind": "named", "name": "sample::Error"}}],
     }],
 }
@@ -91,6 +92,19 @@ class IRValidationTests(unittest.TestCase):
     def test_error_description_must_be_nonempty(self):
         self.ir["operations"][0]["errors"][0]["description"] = ""
         with self.assertRaisesRegex(ValueError, "expected nonempty text"):
+            validate(self.ir)
+
+    def test_documented_server_error_does_not_change_function_return(self):
+        operation = self.ir["operations"][0]
+        operation["result"] = False
+        routes = http_routes(self.ir, "codec.hpp")
+        self.assertIn("rig_json::encode(sample::get_item(", routes)
+        self.assertNotIn("const auto outcome = sample::get_item(", routes)
+        operation["result"] = True
+        self.assertIn("const auto outcome = sample::get_item(",
+                      http_routes(self.ir, "codec.hpp"))
+        operation["result"] = 1
+        with self.assertRaisesRegex(ValueError, "result: expected boolean"):
             validate(self.ir)
 
     def test_open_record_flag_must_be_boolean(self):

@@ -153,8 +153,9 @@ names. An optional field is always present and contains either a value or
 The IR carries qualified C++ names for types and operations. OpenAPI uses short
 schema names and operation IDs when unique, and dotted qualified names when
 short names collide. `examples/qualified` checks this across namespaces.
-Server-level HTTP errors such as malformed headers and unexpected failures
-are outside these per-operation declarations.
+Server-level HTTP errors can be documented with `RIG_ERROR_RESPONSE` even when
+the function returns a plain success value. The generated dispatcher then calls
+the function directly; the hosting server remains responsible for those errors.
 The current codec generator targets public aggregate records. The route generator currently supports
 literal path segments and whole-segment `int` or string placeholders.
 IR validation rejects ambiguous overlapping routes, and generated dispatch

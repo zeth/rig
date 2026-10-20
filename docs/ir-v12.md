@@ -32,6 +32,7 @@ the order of the requested namespaces.
         {"name": "id", "type": {"kind": "builtin", "name": "int"}}
       ],
       "returns": {"kind": "named", "name": "app::Item"},
+      "result": true,
       "errors": [
         {"status": 404, "type": {"kind": "named", "name": "app::Error"}}
       ]
@@ -60,12 +61,15 @@ Every field, parameter, return value, and error body has a type reference:
 | `optional` | `value`: a type reference | `std::optional<T>` |
 
 An operation has `name`, `cpp_name`, `method`, `path`, `parameters`, and `returns`.
+The inspector writes `result: true` for a `rig::result` return type and
+`result: false` for a plain return type. A documented server-level error can
+therefore coexist with a plain function return.
 `errors` is an optional ordered array of `{status, type}` objects; the
 inspector writes it even when empty. A function returning `rig::result<Success,
 rig::error<Status, Body>...>` supplies both the success type and its declared
 error responses. The generated HTTP dispatcher returns the selected status
-and encoded body. Plain return types produce status 200 and an empty `errors`
-array. Methods are uppercase `GET`, `POST`,
+and encoded body. Plain return types produce status 200; their `errors` array
+can document responses supplied by the hosting server. Methods are uppercase `GET`, `POST`,
 `PUT`, `PATCH`, or `DELETE`. Error status codes are unique integers from 400
 through 599. Each method and path pair and each operation `cpp_name` is unique.
 

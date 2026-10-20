@@ -275,9 +275,11 @@ def validate(document):
         location = f"$.operations[{index}]"
         operation = _object(
             operation, location,
-            ("name", "cpp_name", "method", "path", "parameters", "returns"),
+            ("name", "cpp_name", "method", "path", "parameters", "returns", "result"),
             ("errors", "summary", "description", "response_description", "context_parameters"),
         )
+        if type(operation["result"]) is not bool:
+            raise ValueError(f"{location}.result: expected boolean")
         for key in ("summary", "description", "response_description"):
             if key in operation and (not isinstance(operation[key], str) or not operation[key]):
                 raise ValueError(f"{location}.{key}: expected nonempty text")
