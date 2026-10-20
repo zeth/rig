@@ -37,6 +37,8 @@ def main(argv=None):
     openapi = commands.add_parser("openapi", help="generate OpenAPI JSON from IR on stdin")
     openapi.add_argument("--title", default="API")
     openapi.add_argument("--version", default="0.1.0")
+    openapi.add_argument("--omit-operation-ids", action="store_true",
+                         help="omit inferred operation IDs from the generated document")
     codec = commands.add_parser("json-codec", help="generate C++20 JSON codecs")
     codec.add_argument("--api-header", required=True)
     routes = commands.add_parser("http-routes", help="generate C++20 HTTP dispatch")
@@ -58,7 +60,9 @@ def main(argv=None):
             if args.command == "validate":
                 validate(ir)
             elif args.command == "openapi":
-                json.dump(convert(ir, args.title, args.version), sys.stdout, indent=2)
+                json.dump(convert(ir, args.title, args.version,
+                                  include_operation_ids=not args.omit_operation_ids),
+                          sys.stdout, indent=2)
                 sys.stdout.write("\n")
             elif args.command == "json-codec":
                 sys.stdout.write(json_codec(ir, args.api_header))

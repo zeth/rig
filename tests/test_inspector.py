@@ -38,7 +38,7 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 7)
+            self.assertEqual(ir["ir_version"], 8)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["operations"][1]["parameters"][0]["in"], "query")
             self.assertEqual(ir["operations"][1]["parameters"][0]["range"],
@@ -137,7 +137,7 @@ class InspectorTests(unittest.TestCase):
             (Path(directory) / "api.hpp").write_text(
                 '#include <rig/route.hpp>\n'
                 'namespace sample {\n'
-                'struct Reply { bool ok RIG_BOOL_VALUE(true); };\n'
+                'struct RIG_OPEN_RECORD Reply { bool ok RIG_BOOL_VALUE(true); };\n'
                 'struct Error { bool ok RIG_BOOL_VALUE(false); };\n'
                 'RIG_ROUTE(POST, "/bye")\n'
                 'RIG_SUMMARY("Leaving")\n'
@@ -151,6 +151,7 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
             self.assertEqual(ir["types"][0]["fields"][0]["bool_value"], True)
+            self.assertTrue(ir["types"][0]["open"])
             operation = ir["operations"][0]
             self.assertEqual(operation["summary"], "Leaving")
             self.assertEqual(operation["description"], "A hint to the server.")
@@ -160,6 +161,34 @@ class InspectorTests(unittest.TestCase):
                 "description": "Unauthorized",
             }])
             self.assertEqual([entry["name"] for entry in ir["types"]], ["Reply", "Error"])
+            codec = subprocess.run(
+                [sys.executable, "-m", "rig", "json-codec", "--api-header", "api.hpp"],
+                input=result.stdout, cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(codec.returncode, 0, codec.stderr)
+            (Path(directory) / "codec.hpp").write_text(codec.stdout)
+            (Path(directory) / "check.cpp").write_text(
+                '#include "codec.hpp"\n'
+                'int main() {\n'
+                '  auto value = rig_json::decode<sample::Reply>('
+                'nlohmann::json{{"ok", true}, {"extra", 1}});\n'
+                '  if (!value.ok) return 1;\n'
+                '  try { (void)rig_json::decode<sample::Reply>('
+                'nlohmann::json{{"ok", false}}); return 2; }\n'
+                '  catch (const std::invalid_argument&) {}\n'
+                '  try { (void)rig_json::encode(sample::Reply{false}); return 3; }\n'
+                '  catch (const std::invalid_argument&) {}\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = Path(directory) / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", f"-I{include_dir}", "-I.", "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
 
     def test_compilation_failure_has_no_ir_output(self):
         with tempfile.TemporaryDirectory() as directory:

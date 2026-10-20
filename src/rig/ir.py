@@ -1,10 +1,10 @@
-"""Validation and shared route rules for RIG IR version 7."""
+"""Validation and shared route rules for RIG IR version 8."""
 
 import re
 from collections import Counter
 
 
-VERSION = 7
+VERSION = 8
 BUILTINS = {"int", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -174,7 +174,7 @@ def validate(document):
     names = set()
     for index, entry in enumerate(entries):
         location = f"$.types[{index}]"
-        entry = _object(entry, location, ("kind", "name", "cpp_name"), ("fields", "values"))
+        entry = _object(entry, location, ("kind", "name", "cpp_name"), ("fields", "values", "open"))
         kind = entry["kind"]
         if kind not in ("record", "enum"):
             raise ValueError(f"{location}: unsupported declaration kind: {kind!r}")
@@ -184,7 +184,10 @@ def validate(document):
             raise ValueError(f"{location}: type name does not match cpp_name")
         _unique(names, qualified, location, "type name")
         member_key = "fields" if kind == "record" else "values"
-        _object(entry, location, ("kind", "name", "cpp_name", member_key))
+        _object(entry, location, ("kind", "name", "cpp_name", member_key),
+                ("open",) if kind == "record" else ())
+        if "open" in entry and type(entry["open"]) is not bool:
+            raise ValueError(f"{location}.open: expected boolean")
         members = _array(entry[member_key], f"{location}.{member_key}")
         member_names = set()
         for member_index, member in enumerate(members):

@@ -201,6 +201,10 @@ void emit_record(std::ostream& output) {
     quoted(output, std::meta::identifier_of(Type));
     output << ",\"cpp_name\":";
     quoted(output, qualified_name<Type>());
+    constexpr auto open = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::open_record));
+    static_assert(open.size() <= 1, "RIG records need at most one open-record annotation");
+    if constexpr (open.size() == 1) output << ",\"open\":true";
     output << ",\"fields\":[";
     bool first = true;
     template for (constexpr auto field : std::define_static_array(
@@ -383,7 +387,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":7,\"types\":[";
+        output_ << "{\"ir_version\":8,\"types\":[";
     }
 
     template <std::meta::info Type>

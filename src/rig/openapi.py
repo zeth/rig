@@ -12,7 +12,7 @@ PRIMITIVES = {
 }
 
 
-def convert(ir, title="API", version="0.1.0"):
+def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
     validate(ir)
     types = {entry["cpp_name"]: entry for entry in ir["types"]}
     schema_names = public_names(types)
@@ -56,12 +56,14 @@ def convert(ir, title="API", version="0.1.0"):
                 if "bool_value" in field:
                     property_schema["enum"] = [field["bool_value"]]
                 properties[field["name"]] = property_schema
-            components[name] = {
+            record_schema = {
                 "type": "object",
                 "properties": properties,
                 "required": list(properties),
-                "additionalProperties": False,
             }
+            if not entry.get("open", False):
+                record_schema["additionalProperties"] = False
+            components[name] = record_schema
         elif entry["kind"] == "enum":
             components[name] = {"type": "string", "enum": entry["values"]}
         else:
@@ -110,14 +112,14 @@ def convert(ir, title="API", version="0.1.0"):
             else:
                 bodies.append(parameter)
 
-        result = {
-            "operationId": operation_names[operation["cpp_name"]],
-            "responses": {
-                "200": {
-                    "description": operation.get("response_description", "Success"),
-                    "content": {"application/json": {"schema": schema(operation["returns"])}}
-                }
-            },
+        result = {}
+        if include_operation_ids:
+            result["operationId"] = operation_names[operation["cpp_name"]]
+        result["responses"] = {
+            "200": {
+                "description": operation.get("response_description", "Success"),
+                "content": {"application/json": {"schema": schema(operation["returns"])}}
+            }
         }
         for key in ("summary", "description"):
             if key in operation:

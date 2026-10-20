@@ -140,7 +140,8 @@ def generate(ir, api_header):
                 lines.append(f'    if (value == "{value}") return {qualified}::{value};')
             lines.append(f'    throw std::invalid_argument("unknown {name}");')
         else:
-            lines.append(f'    if (!value.is_object() || value.size() != {len(fields)}')
+            size_check = "" if entry.get("open", False) else f" || value.size() != {len(fields)}"
+            lines.append(f'    if (!value.is_object(){size_check}')
             for field in fields:
                 lines.append(f'        || !value.contains("{field["name"]}")')
             lines.append(f') throw std::invalid_argument("expected {name}");')

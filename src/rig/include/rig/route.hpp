@@ -15,6 +15,7 @@ struct summary { char text[256]; };
 struct description { char text[2048]; };
 struct response_description { char text[256]; };
 struct bool_value { bool value; };
+struct open_record {};
 struct error_response {
     int status;
     std::meta::info body;
@@ -28,6 +29,7 @@ struct error_response {
 #define RIG_DESCRIPTION(text) [[=::rig::description{text}]]
 #define RIG_RESPONSE_DESCRIPTION(text) [[=::rig::response_description{text}]]
 #define RIG_BOOL_VALUE(value) [[=::rig::bool_value{value}]]
+#define RIG_OPEN_RECORD [[=::rig::open_record{}]]
 #define RIG_ERROR_RESPONSE(status, body, description) \
     [[=::rig::error_response{status, ^^body, description}]]
 #else
@@ -38,5 +40,6 @@ struct error_response {
 #define RIG_DESCRIPTION(text)
 #define RIG_RESPONSE_DESCRIPTION(text)
 #define RIG_BOOL_VALUE(value)
+#define RIG_OPEN_RECORD
 #define RIG_ERROR_RESPONSE(status, body, description)
 #endif
