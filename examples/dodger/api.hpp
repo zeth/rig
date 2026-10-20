@@ -1,6 +1,7 @@
 #pragma once
 
 #include <rig/route.hpp>
+#include <rig/result.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -44,20 +45,19 @@ struct ErrorResponse {
     std::string error;
 };
 
+using GameLookup = rig::result<GameState, rig::error<404, ErrorResponse>>;
+using ActionResult = rig::result<GameState,
+    rig::error<400, ErrorResponse>,
+    rig::error<404, ErrorResponse>,
+    rig::error<409, ErrorResponse>>;
+
 RIG_ROUTE(GET, "/games/{id}")
-RIG_ERROR(404, ErrorResponse)
-GameState get_game(int id);
+GameLookup get_game(int id);
 
 RIG_ROUTE(POST, "/games/{id}/players/2/actions")
-RIG_ERROR(400, ErrorResponse)
-RIG_ERROR(404, ErrorResponse)
-RIG_ERROR(409, ErrorResponse)
-GameState submit_action(int id, Action action);
+ActionResult submit_action(int id, Action action);
 
 RIG_ROUTE(POST, "/games/{id}/players/1/actions")
-RIG_ERROR(400, ErrorResponse)
-RIG_ERROR(404, ErrorResponse)
-RIG_ERROR(409, ErrorResponse)
-GameState submit_human_action(int id, Action action);
+ActionResult submit_human_action(int id, Action action);
 
 }

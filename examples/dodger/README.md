@@ -29,7 +29,8 @@ The Makefile passes `api.hpp` and the `dodger` namespace to the installed
 `rig inspect` command. RIG discovers the annotated operations and their
 reachable types without a separate declaration list or C++26 app code.
 The routes declare a shared `ErrorResponse` type and their 400, 404, and 409
-responses with `RIG_ERROR`; these appear in the generated OpenAPI document.
+responses with `rig::result` and `rig::error`; these appear in the generated
+OpenAPI document and are returned by the generated HTTP dispatcher.
 
 The sample contract now has left/stay/right actions, player lives and shove
 cooldowns, falling obstacles, and a waiting/running/finished game status. A

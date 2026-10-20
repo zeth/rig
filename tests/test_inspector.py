@@ -106,6 +106,28 @@ class InspectorTests(unittest.TestCase):
                 ["first::read", "second::read"],
             )
 
+    def test_result_return_declares_success_and_error_bodies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <rig/result.hpp>\n'
+                'namespace sample {\n'
+                'struct Item { int value; };\n'
+                'struct Failure { int code; };\n'
+                'using Reply = rig::result<Item, rig::error<404, Failure>>;\n'
+                'RIG_ROUTE(GET, "/item") Reply get_item();\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            ir = json.loads(result.stdout)
+            self.assertEqual([entry["name"] for entry in ir["types"]], ["Item", "Failure"])
+            operation = ir["operations"][0]
+            self.assertEqual(operation["returns"], {"kind": "named", "name": "sample::Item"})
+            self.assertEqual(operation["errors"], [{
+                "status": 404, "type": {"kind": "named", "name": "sample::Failure"},
+            }])
+
     def test_compilation_failure_has_no_ir_output(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "bad.cpp").write_text("int main( {\n")

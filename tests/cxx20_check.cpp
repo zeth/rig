@@ -1,4 +1,5 @@
 #include <rig/route.hpp>
+#include <rig/result.hpp>
 
 struct Result { int value; };
 RIG_ROUTE(GET, "/results")

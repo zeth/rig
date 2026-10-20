@@ -18,6 +18,7 @@ class CommandTests(unittest.TestCase):
         include_dir = Path(self.run_rig("include-dir").strip())
         self.assertTrue((include_dir / "rig" / "route.hpp").is_file())
         self.assertTrue((include_dir / "rig" / "inspect.hpp").is_file())
+        self.assertTrue((include_dir / "rig" / "result.hpp").is_file())
 
     def test_openapi_and_embedding_use_standard_streams(self):
         ir = {"ir_version": 3, "types": [], "operations": []}

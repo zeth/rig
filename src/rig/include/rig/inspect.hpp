@@ -5,8 +5,10 @@
 #endif
 
 #include <rig/route.hpp>
+#include <rig/result.hpp>
 
 #include <meta>
+#include <cstddef>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -22,10 +24,9 @@ consteval bool has_route(std::meta::info member) {
         !std::meta::annotations_of_with_type(member, ^^rig::route).empty();
 }
 
-consteval bool is_error_annotation(std::meta::info annotation) {
-    const auto type = std::meta::type_of(std::meta::constant_of(annotation));
+consteval bool is_result_type(std::meta::info type) {
     return std::meta::has_template_arguments(type) &&
-        std::meta::template_of(type) == ^^rig::error_response;
+        std::meta::template_of(type) == ^^rig::result;
 }
 
 consteval bool contains_type(const std::vector<std::meta::info>& types,
@@ -41,6 +42,15 @@ consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& 
     if (std::meta::is_same_type(type, ^^int) ||
         std::meta::is_same_type(type, ^^bool) ||
         std::meta::is_same_type(type, ^^std::string)) return;
+
+    if (is_result_type(type)) {
+        const auto arguments = std::meta::template_arguments_of(type);
+        collect_type(arguments[0], types);
+        for (std::size_t index = 1; index < arguments.size(); ++index) {
+            collect_type(std::meta::template_arguments_of(arguments[index])[1], types);
+        }
+        return;
+    }
 
     if (std::meta::has_template_arguments(type)) {
         const auto templ = std::meta::template_of(type);
@@ -69,12 +79,6 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
         collect_type(std::meta::return_type_of(member), types);
         for (auto parameter : std::meta::parameters_of(member)) {
             collect_type(std::meta::type_of(parameter), types);
-        }
-        for (auto annotation : std::meta::annotations_of(member)) {
-            if (is_error_annotation(annotation)) {
-                const auto type = std::meta::type_of(std::meta::constant_of(annotation));
-                collect_type(std::meta::template_arguments_of(type)[0], types);
-            }
         }
     }
     // Keep direct namespace types in source order so adding a route does not
@@ -222,6 +226,21 @@ void emit_enum(std::ostream& output) {
     output << "]}";
 }
 
+consteval std::vector<std::meta::info> result_errors(std::meta::info type) {
+    auto arguments = std::meta::template_arguments_of(type);
+    arguments.erase(arguments.begin());
+    return arguments;
+}
+
+template <std::meta::info Error>
+void emit_result_error(std::ostream& output) {
+    constexpr auto arguments = std::define_static_array(std::meta::template_arguments_of(Error));
+    constexpr int status = [:arguments[0]:];
+    output << "{\"status\":" << status << ",\"type\":";
+    emit_type<arguments[1]>(output);
+    output << '}';
+}
+
 template <std::meta::info Function>
 void emit_operation(std::ostream& output) {
     constexpr auto annotations = std::define_static_array(
@@ -249,20 +268,21 @@ void emit_operation(std::ostream& output) {
         output << '}';
     }
     output << "],\"returns\":";
-    emit_type<std::meta::return_type_of(Function)>(output);
+    constexpr auto return_type = std::meta::remove_cvref(std::meta::return_type_of(Function));
+    if constexpr (is_result_type(return_type)) {
+        constexpr auto arguments = std::define_static_array(
+            std::meta::template_arguments_of(return_type));
+        emit_type<arguments[0]>(output);
+    } else {
+        emit_type<return_type>(output);
+    }
     output << ",\"errors\":[";
-    first = true;
-    template for (constexpr auto annotation : std::define_static_array(
-        std::meta::annotations_of(Function))) {
-        if constexpr (is_error_annotation(annotation)) {
-            constexpr auto error = [:std::meta::constant_of(annotation):];
-            constexpr auto annotation_type = std::meta::type_of(std::meta::constant_of(annotation));
-            constexpr auto body = std::meta::template_arguments_of(annotation_type)[0];
+    if constexpr (is_result_type(return_type)) {
+        first = true;
+        template for (constexpr auto error : std::define_static_array(result_errors(return_type))) {
             if (!first) output << ',';
             first = false;
-            output << "{\"status\":" << error.status << ",\"type\":";
-            emit_type<body>(output);
-            output << '}';
+            emit_result_error<error>(output);
         }
     }
     output << ']';

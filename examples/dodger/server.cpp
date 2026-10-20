@@ -93,16 +93,12 @@ Request read_request(int client) {
     return request;
 }
 
-json dispatch(const Request& request) {
+rig_http::response dispatch(const Request& request) {
     try {
         if (auto response = rig_http::dispatch(request.method, request.path, request.body))
             return *response;
-    } catch (const std::out_of_range&) {
-        throw HttpError(404, "unknown game");
     } catch (const std::invalid_argument& error) {
         throw HttpError(400, error.what());
-    } catch (const std::logic_error& error) {
-        throw HttpError(409, error.what());
     }
     throw HttpError(404, "route not found");
 }
@@ -138,7 +134,8 @@ void handle_client(int client) {
         if (request.method == "GET" && request.path == "/openapi.json") {
             send_response(client, 200, rig::generated::openapi_json);
         } else {
-            send_response(client, 200, dispatch(request));
+            const auto response = dispatch(request);
+            send_response(client, response.status, response.body);
         }
     } catch (const HttpError& error) {
         send_response(client, error.status, rig_json::encode(dodger::ErrorResponse{error.what()}));

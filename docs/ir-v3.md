@@ -60,7 +60,11 @@ Every field, parameter, return value, and error body has a type reference:
 
 An operation has `name`, `cpp_name`, `method`, `path`, `parameters`, and `returns`.
 `errors` is an optional ordered array of `{status, type}` objects; the
-inspector writes it even when empty. Methods are uppercase `GET`, `POST`,
+inspector writes it even when empty. A function returning `rig::result<Success,
+rig::error<Status, Body>...>` supplies both the success type and its declared
+error responses. The generated HTTP dispatcher returns the selected status
+and encoded body. Plain return types produce status 200 and an empty `errors`
+array. Methods are uppercase `GET`, `POST`,
 `PUT`, `PATCH`, or `DELETE`. Error status codes are unique integers from 400
 through 599. Each method and path pair and each operation `cpp_name` is unique.
 
@@ -85,3 +89,7 @@ types are rejected so that every generator interprets version 3 the same way.
 Version 2 IR is rejected; regenerate it with `rig inspect` before running the
 version 3 generators. `json-codec` and `http-routes` now use `cpp_name` and no
 longer take `--namespace`.
+
+The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
+The IR shape is unchanged: `returns` describes the success body, and `errors`
+describes the status and body of each typed error alternative.

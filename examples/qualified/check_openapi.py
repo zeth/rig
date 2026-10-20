@@ -7,7 +7,8 @@ assert {entry["cpp_name"] for entry in ir["types"]} == {
     "left::Result", "right::Result", "service::Pair"
 }
 assert {entry["cpp_name"] for entry in ir["operations"]} == {
-    "left::read", "left::by_key", "left::newest", "right::read", "service::echo"
+    "left::read", "left::by_key", "left::newest", "right::read",
+    "service::echo", "service::check"
 }
 document = json.loads(Path("build/openapi.json").read_text())
 schemas = document["components"]["schemas"]
@@ -19,3 +20,10 @@ assert schemas["Pair"]["properties"] == {
 assert document["paths"]["/left"]["get"]["operationId"] == "left.read"
 assert document["paths"]["/left/new"]["get"]["operationId"] == "newest"
 assert document["paths"]["/right"]["get"]["operationId"] == "right.read"
+checked = document["paths"]["/checked"]["post"]["responses"]
+assert checked["422"]["content"]["application/json"]["schema"] == {
+    "$ref": "#/components/schemas/left.Result"
+}
+assert checked["503"]["content"]["application/json"]["schema"] == {
+    "$ref": "#/components/schemas/right.Result"
+}

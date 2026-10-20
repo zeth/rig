@@ -1,6 +1,7 @@
 #pragma once
 
 #include <rig/route.hpp>
+#include <rig/result.hpp>
 #include <string>
 
 namespace left {
@@ -21,4 +22,7 @@ struct Pair {
     right::Result right;
 };
 RIG_ROUTE(POST, "/pairs") Pair echo(Pair pair);
+RIG_ROUTE(POST, "/checked")
+rig::result<Pair, rig::error<422, left::Result>, rig::error<503, right::Result>>
+check(Pair pair);
 }

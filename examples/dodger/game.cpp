@@ -91,21 +91,31 @@ Game& game_instance() {
     return game;
 }
 
-GameState get_game(int id) {
-    if (id != 1) throw std::out_of_range("unknown game");
+GameLookup get_game(int id) {
+    if (id != 1) return rig::error<404, ErrorResponse>{{"unknown game"}};
     return game_instance().state();
 }
 
-GameState submit_action(int id, Action action) {
-    if (id != 1) throw std::out_of_range("unknown game");
-    game_instance().set_action(2, action);
-    return game_instance().state();
+namespace {
+ActionResult apply_action(int id, int player, Action action) {
+    if (id != 1) return rig::error<404, ErrorResponse>{{"unknown game"}};
+    try {
+        game_instance().set_action(player, action);
+        return game_instance().state();
+    } catch (const std::invalid_argument& error) {
+        return rig::error<400, ErrorResponse>{{error.what()}};
+    } catch (const std::logic_error& error) {
+        return rig::error<409, ErrorResponse>{{error.what()}};
+    }
+}
+} // namespace
+
+ActionResult submit_action(int id, Action action) {
+    return apply_action(id, 2, action);
 }
 
-GameState submit_human_action(int id, Action action) {
-    if (id != 1) throw std::out_of_range("unknown game");
-    game_instance().set_action(1, action);
-    return game_instance().state();
+ActionResult submit_human_action(int id, Action action) {
+    return apply_action(id, 1, action);
 }
 
 } // namespace dodger

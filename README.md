@@ -85,16 +85,18 @@ RIG uses modern compiler reflection to inspect ordinary C++20 code, extract its 
 ### Intended developer experience
 
 ```cpp
+#include <rig/result.hpp>
+
 RIG_ROUTE(GET, "/items/{id}")
-RIG_ERROR(404, ErrorResponse)
-Item get_item(ItemId id);
+rig::result<Item, rig::error<404, ErrorResponse>> get_item(ItemId id);
 
 RIG_ROUTE(POST, "/items")
 Item create_item(CreateItemRequest request);
 ```
 
-The annotation macros are implemented in `src/rig/include/rig/route.hpp` and disappear in
-ordinary C++20 builds.
+The route annotation macro is implemented in `src/rig/include/rig/route.hpp`
+and disappears in ordinary C++20 builds. `rig/result.hpp` supplies a small
+C++20 return type for operations with declared errors.
 
 Developers continue writing ordinary C++20. RIG uses C++26 reflection at generation time to discover the annotated operations, extract their types and semantics, and produce an OpenAPI specification.
 
@@ -134,8 +136,9 @@ output. See [IR version 3](docs/ir-v3.md) for its format and current rules.
 Current conventions are intentionally small: a parameter named in the route
 is a path parameter; one remaining parameter becomes a JSON request body;
 registered record fields are required; a successful operation returns
-HTTP 200 with a JSON body; and `RIG_ERROR(status, Body)` declares an operation's
-JSON error response. The IR currently describes `int`, `bool`,
+HTTP 200 with a JSON body; and `rig::result<Success, rig::error<Status, Body>...>`
+declares operation errors. The generated HTTP dispatcher returns the chosen
+status and JSON body. The IR currently describes `int`, `bool`,
 `std::string`, registered records and enums, `std::vector<T>`, and
 `std::optional<T>`. Enums become JSON strings matching their C++ enumerator
 names. An optional field is always present and contains either a value or

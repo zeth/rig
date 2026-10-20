@@ -48,6 +48,9 @@ build/game-test: game.cpp game.hpp tests/game_test.cpp api.hpp
 build/json-codec-test: tests/json_codec_test.cpp api.hpp build/dodger_json.hpp
 	$(CXX) -std=c++20 -Wall -Wextra -Wpedantic -I$(RIG_INCLUDE) -I. tests/json_codec_test.cpp -o $@
 
+build/result-route-test: game.cpp game.hpp tests/result_route_test.cpp api.hpp build/dodger_routes.hpp
+	$(CXX) -std=c++20 -Wall -Wextra -Wpedantic -I$(RIG_INCLUDE) -I. game.cpp tests/result_route_test.cpp -o $@
+
 generate: build/openapi.json build/dodger_routes.hpp build/dodger_openapi.hpp
 	cp build/openapi.json openapi.json
 
@@ -57,12 +60,13 @@ server: build/dodger-server
 play: build/dodger-server build/dodger-client.ready
 	$(CLIENT_PYTHON) play.py
 
-check: build/openapi.json build/dodger-server build/game-test build/json-codec-test build/dodger-client.ready
+check: build/openapi.json build/dodger-server build/game-test build/json-codec-test build/result-route-test build/dodger-client.ready
 	$(RIG) validate < build/rig.json
 	$(CLIENT_PYTHON) -m unittest discover -s tests -p 'test_*.py'
 	cmp build/openapi.json openapi.json
 	./build/game-test
 	./build/json-codec-test
+	./build/result-route-test
 	$(CLIENT_PYTHON) tests/test_server.py build/dodger-server openapi.json
 	$(CLIENT_PYTHON) tests/test_route_change.py $(CXX) $(RIG)
 

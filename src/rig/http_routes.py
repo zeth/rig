@@ -35,9 +35,12 @@ def generate(ir, codec_header):
         "#include <regex>",
         "#include <stdexcept>",
         "#include <string>",
+        "#include <type_traits>",
+        "#include <variant>",
         "",
         "namespace rig_http {",
         "using json = nlohmann::json;",
+        "struct response { int status; json body; };",
         "template <typename T> T decode_body(const std::string& body) {",
         "    try {",
         "        return rig_json::decode<T>(json::parse(body));",
@@ -45,7 +48,7 @@ def generate(ir, codec_header):
         "        throw std::invalid_argument(error.what());",
         "    }",
         "}",
-        "inline std::optional<json> dispatch(const std::string& method,",
+        "inline std::optional<response> dispatch(const std::string& method,",
         "                                    const std::string& path,",
         "                                    const std::string& body) {",
         "    std::smatch match;",
@@ -75,7 +78,22 @@ def generate(ir, codec_header):
             else:
                 value = f"decode_body<{param_type}>(body)"
             arguments.append(value)
-        lines.append(f"        return rig_json::encode({operation['cpp_name']}({', '.join(arguments)}));")
+        call = f"{operation['cpp_name']}({', '.join(arguments)})"
+        if operation.get("errors"):
+            success = cpp_type(operation["returns"])
+            lines += [
+                f"        const auto outcome = {call};",
+                "        return std::visit([](const auto& value) -> response {",
+                "            using value_type = std::decay_t<decltype(value)>;",
+                f"            if constexpr (std::is_same_v<value_type, {success}>) {{",
+                "                return {200, rig_json::encode(value)};",
+                "            } else {",
+                "                return {value_type::status, rig_json::encode(value.body)};",
+                "            }",
+                "        }, outcome.value());",
+            ]
+        else:
+            lines.append(f"        return response{{200, rig_json::encode({call})}};")
         lines.append("    }")
     lines += [
         "    return std::nullopt;",
