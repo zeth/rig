@@ -27,6 +27,18 @@ int main() {
     assert(game.state().human.shove_cooldown_ticks > 0);
     assert(game.state().obstacles.size() == 1);
 
+    const int starting_lives = game.state().human.lives + game.state().bot.lives;
+    bool respawned = false;
+    for (int i = 0; i < 5000 && !respawned; ++i) {
+        game.tick();
+        if (game.state().human.lives + game.state().bot.lives < starting_lives) {
+            assert(game.state().human.x == 5);
+            assert(game.state().bot.x == 14);
+            respawned = true;
+        }
+    }
+    assert(respawned);
+
     // Repeated ticks advance obstacles, resolve hits, and eventually end the match.
     for (int i = 0; i < 5000 && game.state().status != dodger::GameStatus::Finished; ++i)
         game.tick();

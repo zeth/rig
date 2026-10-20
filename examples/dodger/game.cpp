@@ -10,6 +10,9 @@ namespace {
 constexpr int kLives = 3;
 constexpr int kCooldown = 15;
 
+constexpr int human_start(int width) { return width / 4; }
+constexpr int bot_start(int width) { return width - 1 - width / 4; }
+
 int direction(Move move) {
     switch (move) {
     case Move::Left: return -1;
@@ -23,7 +26,7 @@ int direction(Move move) {
 
 Game::Game(int width, int height)
     : state_{1, 0, width, height, GameStatus::Waiting,
-             {width / 4, kLives, 0}, {width - 1 - width / 4, kLives, 0},
+             {human_start(width), kLives, 0}, {bot_start(width), kLives, 0},
              {}, std::nullopt} {
     if (width < 8 || width > 80 || height < 6 || height > 40)
         throw std::invalid_argument("arena width must be 8 to 80 and height 6 to 40");
@@ -64,13 +67,20 @@ void Game::tick() {
     }
 
     for (auto& obstacle : state_.obstacles) ++obstacle.y;
+    bool lost_life = false;
     for (const auto& obstacle : state_.obstacles) {
         if (obstacle.y == state_.arena_height - 1) {
             for (auto* player : players) {
-                if (player->x >= obstacle.x && player->x < obstacle.x + obstacle.width)
+                if (player->x >= obstacle.x && player->x < obstacle.x + obstacle.width) {
                     --player->lives;
+                    lost_life = true;
+                }
             }
         }
+    }
+    if (lost_life) {
+        state_.human.x = human_start(state_.arena_width);
+        state_.bot.x = bot_start(state_.arena_width);
     }
     std::erase_if(state_.obstacles, [this](const Obstacle& obstacle) {
         return obstacle.y >= state_.arena_height - 1;

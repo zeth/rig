@@ -39,6 +39,7 @@ cooldowns, falling obstacles, and a waiting/running/finished game status. A
 winner is `null` until the game ends. Both players start with three lives and
 the same movement speed and shove cooldown. Obstacles appear every five ticks;
 the game runs at about 30 ticks per second after each player submits an action.
+When either player loses a life, both return to their starting positions.
 The most recent action remains in effect until that player sends another.
 `POST /games` starts a fresh game. Optional `width` and `height` query parameters
 set the arena to 8–80 columns and 6–40 rows; omitting either uses 20 or 12.
@@ -71,7 +72,9 @@ update (about three simulation ticks). Restart `make play` for a new game.
 Every tenth of a second, the bot reads the game state through generated Python
 models, compares left/stay/right against the next few obstacle positions, and
 sends its action over HTTP. It sees the same state and has the
-same movement and shove rules as the human client. After `make check` or
+same movement and shove rules as the human client. It alternates between
+chasing, retreating, and patrolling independently of the human, while dodging
+imminent obstacles first. After `make check` or
 `make play` generates the client, `build/client-venv/bin/python bot.py`
 can also connect to a separately running `make server` instance.
 

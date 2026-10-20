@@ -23,6 +23,12 @@ def choose_action(state):
     human = state.human
     right_edge = state.arena_width - 1
     floor = state.arena_height - 1
+    phase = (state.tick // 45) % 4
+    patrol_right = (state.tick // 12) % 2 == 0
+    if bot.x <= 1:
+        patrol_right = True
+    elif bot.x >= right_edge - 1:
+        patrol_right = False
 
     def position(move, ticks):
         return max(0, min(right_edge, bot.x + DIRECTIONS[move] * ticks))
@@ -40,7 +46,12 @@ def choose_action(state):
                 if obstacle.x <= x < obstacle.x + obstacle.width:
                     cost += 20
         x = position(move, 3)
-        cost += abs(x - human.x) * 0.05
+        if phase == 0:  # Chase.
+            cost += abs(x - human.x) * 0.15
+        elif phase == 2:  # Retreat.
+            cost -= abs(x - human.x) * 0.15
+        else:  # Patrol independently of the human.
+            cost += (-x if patrol_right else x) * 0.15
         cost += (x == 0 or x == right_edge) * 0.2
         if move != Move.STAY:
             cost += 0.1
