@@ -124,6 +124,9 @@ JSON. `rig openapi` emits OpenAPI 3.1 JSON; `rig json-codec` emits C++20
 `rig embed-openapi` emits a header containing the exact OpenAPI bytes. Each
 generator reads IR (or OpenAPI bytes for `embed-openapi`) on standard input
 and writes its result on standard output.
+`rig inspect` compiles a C++26 entry point, runs it, validates its IR, and
+writes that IR to standard output. Pass application include paths and other
+compiler flags after `--`; use `--cxx` to select a compiler.
 Run `rig validate < rig.json` to check the shared IR contract without generating
 output. See [IR version 2](docs/ir-v2.md) for its format and current rules.
 
@@ -158,9 +161,10 @@ output.add_namespace<^^catalog>();
 output.finish();
 ```
 
-Compile that registration file with `-std=c++26 -freflection -DRIG_GENERATING`
-and the directory printed by `rig include-dir`, then pipe its JSON output to
-`rig openapi --title 'Catalog API'`. Namespace discovery sees
+Run `rig inspect inspect.cpp -- -I.` in the directory containing this entry
+point and `api.hpp`, then pipe its JSON output to
+`rig openapi --title 'Catalog API'`. RIG supplies the C++26 reflection flags
+and its installed include directory. Namespace discovery sees
 directly declared functions with a route annotation and follows their
 referenced record and enum types. Unsupported references fail during OpenAPI
 conversion. `rig::writer` also retains explicit `add_type` and

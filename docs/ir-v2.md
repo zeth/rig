@@ -4,6 +4,8 @@ RIG's C++26 inspector writes one JSON object to standard output. The `rig`
 generators read that object from standard input. `rig validate < rig.json`
 checks the complete document and exits without output on success. The IR is a
 build artifact; its version is independent of the Python package version.
+`rig inspect inspect.cpp -- -I.` compiles and runs an inspection entry point,
+validates its output, and writes the original IR bytes to standard output.
 
 ```json
 {

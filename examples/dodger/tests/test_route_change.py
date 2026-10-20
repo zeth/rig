@@ -30,12 +30,9 @@ def main():
             shutil.copyfile(root / name, temporary / name)
         shutil.copyfile(root / "build" / "dodger_json.hpp", temporary / "build" / "dodger_json.hpp")
 
-        inspector = temporary / "inspect"
-        subprocess.run([
-            compiler, "-std=c++26", "-freflection", "-DRIG_GENERATING",
-            f"-I{include_dir}", "inspect.cpp", "-o", str(inspector),
-        ], cwd=temporary, check=True)
-        ir = json.loads(subprocess.check_output([inspector], cwd=root))
+        ir = json.loads(subprocess.check_output([
+            rig, "inspect", "inspect.cpp", "--cxx", compiler, "--", "-I.",
+        ], cwd=temporary))
         openapi_json = subprocess.check_output(
             [rig, "openapi", "--title", "Dodger API"], input=json.dumps(ir), text=True
         )

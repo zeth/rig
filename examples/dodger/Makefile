@@ -6,14 +6,13 @@ RIG_INCLUDE = $(shell $(RIG) include-dir)
 CLIENT_PYTHON = build/client-venv/bin/python
 CLIENT_BIN = $(abspath build/client-venv/bin)
 
+.DELETE_ON_ERROR:
+
 .PHONY: generate check server play clean
 
-build/inspect: inspect.cpp api.hpp
+build/rig.json: inspect.cpp api.hpp $(RIG_SOURCE)
 	mkdir -p build
-	$(CXX) -std=c++26 -freflection -DRIG_GENERATING -I$(RIG_INCLUDE) -I. inspect.cpp -o $@
-
-build/rig.json: build/inspect
-	./build/inspect > $@
+	$(RIG) inspect inspect.cpp --cxx $(CXX) -- -I. > $@
 
 build/openapi.json: build/rig.json $(RIG_SOURCE)
 	$(RIG) openapi --title 'Dodger API' < $< > $@

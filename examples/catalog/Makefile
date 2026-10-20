@@ -1,16 +1,14 @@
 CXX ?= g++
 RIG ?= rig
 RIG_SOURCE ?=
-RIG_INCLUDE = $(shell $(RIG) include-dir)
+
+.DELETE_ON_ERROR:
 
 .PHONY: generate check clean
 
-build/inspect: inspect.cpp api.hpp
+build/rig.json: inspect.cpp api.hpp $(RIG_SOURCE)
 	mkdir -p build
-	$(CXX) -std=c++26 -freflection -DRIG_GENERATING -I$(RIG_INCLUDE) -I. inspect.cpp -o $@
-
-build/rig.json: build/inspect
-	./build/inspect > $@
+	$(RIG) inspect inspect.cpp --cxx $(CXX) -- -I. > $@
 
 build/openapi.json: build/rig.json $(RIG_SOURCE)
 	$(RIG) openapi --title 'Catalog API' < $< > $@

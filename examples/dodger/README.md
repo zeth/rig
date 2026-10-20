@@ -27,6 +27,7 @@ data as `openapi.json`. It also uses generated route dispatch; socket and HTTP
 framing code remain local.
 `inspect.cpp` nominates the `dodger` namespace; RIG discovers the annotated
 operations and their reachable types without a separate declaration list.
+The Makefile obtains IR through the installed `rig inspect` command.
 The routes declare a shared `ErrorResponse` type and their 400, 404, and 409
 responses with `RIG_ERROR`; these appear in the generated OpenAPI document.
 

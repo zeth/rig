@@ -8,14 +8,26 @@ from pathlib import Path
 from .embed_openapi import generate as embed_openapi
 from .http_routes import generate as http_routes
 from .ir import validate
+from .inspector import inspect
 from .json_codec import generate as json_codec
 from .openapi import convert
 
 
 def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    compiler_flags = ()
+    if argv[:1] == ["inspect"] and "--" in argv:
+        separator = argv.index("--")
+        compiler_flags = argv[separator + 1:]
+        argv = argv[:separator]
     parser = argparse.ArgumentParser(prog="rig")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("include-dir", help="print the installed C++ header directory")
+    inspector = commands.add_parser("inspect", help="compile and run a C++26 inspector")
+    inspector.add_argument("source", help="C++ inspection entry point")
+    inspector.add_argument("--cxx", default="g++", help="C++26 compiler (default: g++)")
+    inspector.epilog = "Pass additional compiler flags after --, for example: -- -Iinclude"
     commands.add_parser("validate", help="validate IR on stdin")
     openapi = commands.add_parser("openapi", help="generate OpenAPI JSON from IR on stdin")
     openapi.add_argument("--title", default="API")
@@ -31,6 +43,8 @@ def main(argv=None):
     try:
         if args.command == "include-dir":
             print(Path(__file__).resolve().parent / "include")
+        elif args.command == "inspect":
+            sys.stdout.buffer.write(inspect(args.source, args.cxx, compiler_flags))
         elif args.command == "embed-openapi":
             sys.stdout.write(embed_openapi(sys.stdin.buffer.read()))
         else:
