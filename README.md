@@ -117,10 +117,11 @@ registration. The writer extracts route annotations, parameters, return
 types, typed error responses, record fields, and enum values into RIG IR JSON.
 `tools/openapi.py` converts that IR to OpenAPI 3.1 JSON with Python's standard
 library. `tools/json_codec.py` also generates a C++20 JSON codec header from
-the same IR for Dodger's server. The catalog example has no dependency on
-Dodger and exercises the same pipeline with a different API. This split
-remains an experiment; the examples do not yet establish whether the final
-OpenAPI generator belongs in Python or C++.
+the same IR for Dodger's server. `tools/http_routes.py` generates its C++20
+method and path dispatch, argument decoding, and operation calls. The catalog
+example has no dependency on Dodger and exercises the same pipeline with a
+different API. This split remains an experiment; the examples do not yet
+establish whether the final OpenAPI generator belongs in Python or C++.
 
 Current conventions are intentionally small: a parameter named in the route
 is a path parameter; one remaining parameter becomes a JSON request body;
@@ -136,7 +137,8 @@ types with the same short name is rejected by the OpenAPI converter.
 Server-level HTTP errors such as malformed headers and unexpected failures
 are outside these per-operation declarations.
 The current codec generator targets public aggregate records in one named
-namespace, matching Dodger's API.
+namespace, matching Dodger's API. The route generator currently supports
+literal path segments and whole-segment `int` or string placeholders.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
 selected functions with `RIG_ROUTE`, and nominate the containing namespace in
@@ -172,7 +174,9 @@ the HTTP routes, and a terminal client for the human player. The bot and
 client use only Python's standard library. See `dodger/README.md` for
 controls and standalone commands.
 
-Dodger's HTTP server uses the generated codec to encode its state and error
-responses and decode actions. Routing and HTTP framing remain in the server.
-`make check` tests codec round trips, invalid actions, and live responses
-against the generated OpenAPI schemas.
+Dodger's HTTP server uses generated C++20 code for its JSON format and route
+dispatch. Socket handling, HTTP framing, and exception-to-status mapping
+remain in the server. `make check` tests codec round trips, invalid actions,
+and live responses against the generated OpenAPI schemas. It also changes a
+route annotation in a temporary header and verifies that both OpenAPI and a
+separately built live server follow the new path.

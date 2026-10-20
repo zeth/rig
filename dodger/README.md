@@ -23,7 +23,8 @@ Something instead of the same boring examples.
 `openapi.json` is generated from it. `game.cpp` implements a small deterministic
 simulation, and `server.cpp` serves the declared routes on localhost.
 The server compiles a C++20 JSON codec generated from the same reflected API
-data as `openapi.json`; its route dispatch and HTTP handling remain local.
+data as `openapi.json`. It also uses generated route dispatch; socket and HTTP
+framing code remain local.
 `inspect.cpp` nominates the `dodger` namespace; RIG discovers the annotated
 operations and their reachable types without a separate declaration list.
 The routes declare a shared `ErrorResponse` type and their 400, 404, and 409

@@ -1,5 +1,5 @@
 #include <dodger/game.hpp>
-#include <build/dodger_json.hpp>
+#include <build/dodger_routes.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -15,7 +15,6 @@
 #include <charconv>
 #include <cstring>
 #include <iostream>
-#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -37,16 +36,6 @@ struct Request {
     std::string path;
     std::string body;
 };
-
-dodger::Action decode_action(const std::string& body) {
-    try {
-        return rig_json::decode<dodger::Action>(json::parse(body));
-    } catch (const json::exception& error) {
-        throw HttpError(400, error.what());
-    } catch (const std::invalid_argument& error) {
-        throw HttpError(400, error.what());
-    }
-}
 
 Request read_request(int client) {
     std::string data;
@@ -104,23 +93,13 @@ Request read_request(int client) {
 }
 
 json dispatch(const Request& request) {
-    static const std::regex game_route(R"(^/games/([0-9]+)$)");
-    static const std::regex action_route(R"(^/games/([0-9]+)/players/([12])/actions$)");
-    std::smatch match;
     try {
-        if (request.method == "GET" && std::regex_match(request.path, match, game_route))
-            return rig_json::encode(dodger::get_game(std::stoi(match[1])));
-        if (request.method == "POST" && std::regex_match(request.path, match, action_route)) {
-            const int id = std::stoi(match[1]);
-            const int player = std::stoi(match[2]);
-            auto action = decode_action(request.body);
-            return rig_json::encode(player == 1 ? dodger::submit_human_action(id, action)
-                                              : dodger::submit_action(id, action));
-        }
+        if (auto response = rig_http::dispatch(request.method, request.path, request.body))
+            return *response;
     } catch (const std::out_of_range&) {
         throw HttpError(404, "unknown game");
-    } catch (const std::invalid_argument&) {
-        throw HttpError(400, "invalid game id");
+    } catch (const std::invalid_argument& error) {
+        throw HttpError(400, error.what());
     } catch (const std::logic_error& error) {
         throw HttpError(409, error.what());
     }

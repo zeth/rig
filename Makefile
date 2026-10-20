@@ -16,6 +16,9 @@ build/openapi.json: build/rig.json tools/openapi.py
 build/dodger_json.hpp: build/rig.json tools/json_codec.py
 	$(PYTHON) tools/json_codec.py --namespace dodger --api-header dodger/api.hpp < build/rig.json > $@
 
+build/dodger_routes.hpp: build/rig.json build/dodger_json.hpp tools/http_routes.py tools/openapi.py
+	$(PYTHON) tools/http_routes.py --namespace dodger --codec-header build/dodger_json.hpp < build/rig.json > $@
+
 build/catalog-inspect: examples/catalog/inspect.cpp examples/catalog/api.hpp include/rig/route.hpp include/rig/inspect.hpp
 	mkdir -p build
 	$(CXX) -std=c++26 -freflection -DRIG_GENERATING -Iinclude -I. examples/catalog/inspect.cpp -o $@
@@ -26,7 +29,7 @@ build/catalog-ir.json: build/catalog-inspect
 build/catalog-openapi.json: build/catalog-ir.json tools/openapi.py
 	$(PYTHON) tools/openapi.py --title 'Catalog API' < build/catalog-ir.json > $@
 
-build/dodger-server: dodger/game.cpp dodger/game.hpp dodger/server.cpp dodger/api.hpp build/dodger_json.hpp
+build/dodger-server: dodger/game.cpp dodger/game.hpp dodger/server.cpp dodger/api.hpp build/dodger_routes.hpp
 	$(CXX) -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -I. dodger/game.cpp dodger/server.cpp -o $@
 
 build/game-test: dodger/game.cpp dodger/game.hpp dodger/game_test.cpp dodger/api.hpp
@@ -35,7 +38,7 @@ build/game-test: dodger/game.cpp dodger/game.hpp dodger/game_test.cpp dodger/api
 build/json-codec-test: dodger/json_codec_test.cpp dodger/api.hpp build/dodger_json.hpp
 	$(CXX) -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -I. dodger/json_codec_test.cpp -o $@
 
-generate: build/openapi.json build/catalog-openapi.json build/dodger_json.hpp
+generate: build/openapi.json build/catalog-openapi.json build/dodger_routes.hpp
 	cp build/openapi.json dodger/openapi.json
 	cp build/catalog-openapi.json examples/catalog/openapi.json
 
@@ -53,6 +56,7 @@ check: build/openapi.json build/catalog-openapi.json build/dodger-server build/g
 	./build/game-test
 	./build/json-codec-test
 	$(PYTHON) tools/test_server.py build/dodger-server dodger/openapi.json
+	$(PYTHON) tools/test_route_change.py $(CXX)
 
 clean:
 	rm -rf build
