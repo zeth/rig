@@ -8,6 +8,7 @@
 #include <rig/result.hpp>
 
 #include <meta>
+#include <array>
 #include <cstddef>
 #include <ostream>
 #include <stdexcept>
@@ -79,6 +80,12 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
         collect_type(std::meta::return_type_of(member), types);
         for (auto parameter : std::meta::parameters_of(member)) {
             collect_type(std::meta::type_of(parameter), types);
+        }
+        for (auto annotation : std::meta::annotations_of_with_type(
+                 member, ^^rig::error_response)) {
+            const auto response = std::meta::extract<rig::error_response>(
+                std::meta::constant_of(annotation));
+            collect_type(response.body, types);
         }
     }
     // Keep direct namespace types in source order so adding a route does not
@@ -250,6 +257,28 @@ void emit_result_error(std::ostream& output) {
     output << '}';
 }
 
+template <std::meta::info Annotation>
+consteval int annotated_error_status() {
+    constexpr auto response = [:std::meta::constant_of(Annotation):];
+    return response.status;
+}
+
+template <std::meta::info Annotation>
+consteval std::meta::info annotated_error_body() {
+    constexpr auto response = [:std::meta::constant_of(Annotation):];
+    return response.body;
+}
+
+template <std::meta::info Annotation>
+consteval std::array<char, 256> annotated_error_description() {
+    constexpr auto response = [:std::meta::constant_of(Annotation):];
+    std::array<char, 256> text{};
+    for (std::size_t index = 0; index < text.size(); ++index) {
+        text[index] = response.description[index];
+    }
+    return text;
+}
+
 template <std::meta::info Function>
 void emit_operation(std::ostream& output) {
     constexpr auto annotations = std::define_static_array(
@@ -331,6 +360,19 @@ void emit_operation(std::ostream& output) {
             emit_result_error<error>(output);
         }
     }
+    template for (constexpr auto annotation : std::define_static_array(
+        std::meta::annotations_of_with_type(Function, ^^rig::error_response))) {
+        if (!first) output << ',';
+        first = false;
+        constexpr auto status = annotated_error_status<annotation>();
+        constexpr auto body = annotated_error_body<annotation>();
+        constexpr auto description = annotated_error_description<annotation>();
+        output << "{\"status\":" << status << ",\"type\":";
+        emit_type<body>(output);
+        output << ",\"description\":";
+        quoted(output, description.data());
+        output << '}';
+    }
     output << ']';
     output << '}';
 }
@@ -341,7 +383,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":6,\"types\":[";
+        output_ << "{\"ir_version\":7,\"types\":[";
     }
 
     template <std::meta::info Type>

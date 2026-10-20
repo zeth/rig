@@ -1,4 +1,4 @@
-# RIG IR version 6
+# RIG IR version 7
 
 RIG's C++26 inspector writes one JSON object to standard output. The `rig`
 generators read that object from standard input. `rig validate < rig.json`
@@ -13,7 +13,7 @@ the order of the requested namespaces.
 
 ```json
 {
-  "ir_version": 6,
+  "ir_version": 7,
   "types": [
     {"kind": "record", "name": "Item", "cpp_name": "app::Item", "fields": [
       {"name": "id", "type": {"kind": "builtin", "name": "int"}}
@@ -98,9 +98,9 @@ dispatch uses the same precedence independently of declaration order.
 Record fields are all present in JSON. An `optional` field is present with
 either a value or `null`; it does not mean the field can be omitted. Successful
 operations have a JSON response with HTTP 200. Unknown keys and unsupported
-types are rejected so that every generator interprets version 6 the same way.
+types are rejected so that every generator interprets version 7 the same way.
 Older IR is rejected; regenerate it with `rig inspect` before running the
-version 6 generators. `json-codec` and `http-routes` use `cpp_name` and no
+version 7 generators. `json-codec` and `http-routes` use `cpp_name` and no
 longer take `--namespace`.
 
 `RIG_SUMMARY`, `RIG_DESCRIPTION`, and `RIG_RESPONSE_DESCRIPTION` annotate an
@@ -109,6 +109,13 @@ operation with nonempty text. The first two become optional `summary` and
 200 response. `RIG_BOOL_VALUE(true)` or `RIG_BOOL_VALUE(false)` on a bool
 record field emits `bool_value` in IR. OpenAPI emits a single-value boolean
 enum, and the JSON codec checks the value during both encoding and decoding.
+
+`RIG_ERROR_RESPONSE(status, Body, "Description")` declares an additional
+HTTP error response supplied outside the function, such as by authentication
+middleware. RIG reflects the C++ body type and includes it among reachable
+schemas. The IR error entry includes its status, type, and description. These
+responses do not change the function's C++ return type or generated dispatcher;
+the surrounding HTTP server remains responsible for returning them.
 
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
 The IR shape is unchanged: `returns` describes the success body, and `errors`

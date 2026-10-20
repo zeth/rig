@@ -6,7 +6,7 @@ from rig.openapi import convert
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 6,
+            "ir_version": 7,
             "types": [{
                 "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
@@ -136,13 +136,15 @@ class ConversionTests(unittest.TestCase):
             ]
         })
         self.ir["operations"][0]["errors"] = [
-            {"status": 404, "type": {"kind": "named", "name": "sample::ErrorResponse"}}
+            {"status": 404, "type": {"kind": "named", "name": "sample::ErrorResponse"},
+             "description": "Not found"}
         ]
         responses = convert(self.ir)["paths"]["/results/{id}"]["get"]["responses"]
         self.assertEqual(
             responses["404"]["content"]["application/json"]["schema"],
             {"$ref": "#/components/schemas/ErrorResponse"},
         )
+        self.assertEqual(responses["404"]["description"], "Not found")
 
     def test_invalid_error_status_is_rejected(self):
         self.ir["operations"][0]["errors"] = [

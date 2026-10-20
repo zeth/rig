@@ -38,7 +38,7 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 6)
+            self.assertEqual(ir["ir_version"], 7)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["operations"][1]["parameters"][0]["in"], "query")
             self.assertEqual(ir["operations"][1]["parameters"][0]["range"],
@@ -138,10 +138,12 @@ class InspectorTests(unittest.TestCase):
                 '#include <rig/route.hpp>\n'
                 'namespace sample {\n'
                 'struct Reply { bool ok RIG_BOOL_VALUE(true); };\n'
+                'struct Error { bool ok RIG_BOOL_VALUE(false); };\n'
                 'RIG_ROUTE(POST, "/bye")\n'
                 'RIG_SUMMARY("Leaving")\n'
                 'RIG_DESCRIPTION("A hint to the server.")\n'
                 'RIG_RESPONSE_DESCRIPTION("Acknowledged")\n'
+                'RIG_ERROR_RESPONSE(401, Error, "Unauthorized")\n'
                 'Reply bye();\n'
                 '}\n'
             )
@@ -153,6 +155,11 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(operation["summary"], "Leaving")
             self.assertEqual(operation["description"], "A hint to the server.")
             self.assertEqual(operation["response_description"], "Acknowledged")
+            self.assertEqual(operation["errors"], [{
+                "status": 401, "type": {"kind": "named", "name": "sample::Error"},
+                "description": "Unauthorized",
+            }])
+            self.assertEqual([entry["name"] for entry in ir["types"]], ["Reply", "Error"])
 
     def test_compilation_failure_has_no_ir_output(self):
         with tempfile.TemporaryDirectory() as directory:

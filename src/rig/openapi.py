@@ -126,7 +126,7 @@ def convert(ir, title="API", version="0.1.0"):
             status = error["status"]
             key = str(status)
             result["responses"][key] = {
-                "description": "Error",
+                "description": error.get("description", "Error"),
                 "content": {"application/json": {"schema": schema(error["type"])}}
             }
         if request_needs_decoding(operation):

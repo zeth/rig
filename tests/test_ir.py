@@ -10,7 +10,7 @@ from rig.openapi import convert
 
 
 VALID = {
-    "ir_version": 6,
+    "ir_version": 7,
     "types": [
         {"kind": "record", "name": "Item", "cpp_name": "sample::Item", "fields": [
             {"name": "id", "type": {"kind": "builtin", "name": "int"}},
@@ -65,6 +65,11 @@ class IRValidationTests(unittest.TestCase):
             validate(self.ir)
         field["bool_value"] = False
         self.ir["operations"][0]["summary"] = ""
+        with self.assertRaisesRegex(ValueError, "expected nonempty text"):
+            validate(self.ir)
+
+    def test_error_description_must_be_nonempty(self):
+        self.ir["operations"][0]["errors"][0]["description"] = ""
         with self.assertRaisesRegex(ValueError, "expected nonempty text"):
             validate(self.ir)
 

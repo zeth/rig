@@ -1,10 +1,10 @@
-"""Validation and shared route rules for RIG IR version 6."""
+"""Validation and shared route rules for RIG IR version 7."""
 
 import re
 from collections import Counter
 
 
-VERSION = 6
+VERSION = 7
 BUILTINS = {"int", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -306,10 +306,14 @@ def validate(document):
         statuses = set()
         for error_index, error in enumerate(_array(operation.get("errors", []), f"{location}.errors")):
             error_location = f"{location}.errors[{error_index}]"
-            error = _object(error, error_location, ("status", "type"))
+            error = _object(error, error_location, ("status", "type"), ("description",))
             status = error["status"]
             if type(status) is not int or not 400 <= status <= 599:
                 raise ValueError(f"{error_location}: invalid error status in {name}: {status!r}")
             _unique(statuses, status, error_location, f"response status in {name}")
+            if "description" in error and (
+                not isinstance(error["description"], str) or not error["description"]
+            ):
+                raise ValueError(f"{error_location}.description: expected nonempty text")
             type_ref(error["type"], f"{error_location}.type")
     return ir
