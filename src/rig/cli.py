@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .embed_openapi import generate as embed_openapi
 from .http_routes import generate as http_routes
+from .ir import validate
 from .json_codec import generate as json_codec
 from .openapi import convert
 
@@ -15,6 +16,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="rig")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("include-dir", help="print the installed C++ header directory")
+    commands.add_parser("validate", help="validate IR on stdin")
     openapi = commands.add_parser("openapi", help="generate OpenAPI JSON from IR on stdin")
     openapi.add_argument("--title", default="API")
     openapi.add_argument("--version", default="0.1.0")
@@ -33,7 +35,9 @@ def main(argv=None):
             sys.stdout.write(embed_openapi(sys.stdin.buffer.read()))
         else:
             ir = json.load(sys.stdin)
-            if args.command == "openapi":
+            if args.command == "validate":
+                validate(ir)
+            elif args.command == "openapi":
                 json.dump(convert(ir, args.title, args.version), sys.stdout, indent=2)
                 sys.stdout.write("\n")
             elif args.command == "json-codec":

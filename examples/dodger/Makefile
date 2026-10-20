@@ -59,6 +59,7 @@ play: build/dodger-server build/dodger-client.ready
 	$(CLIENT_PYTHON) play.py
 
 check: build/openapi.json build/dodger-server build/game-test build/json-codec-test build/dodger-client.ready
+	$(RIG) validate < build/rig.json
 	$(CLIENT_PYTHON) -m unittest discover -s tests -p 'test_*.py'
 	cmp build/openapi.json openapi.json
 	./build/game-test

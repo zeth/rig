@@ -21,10 +21,22 @@ class CommandTests(unittest.TestCase):
 
     def test_openapi_and_embedding_use_standard_streams(self):
         ir = {"ir_version": 2, "types": [], "operations": []}
+        self.assertEqual(self.run_rig("validate", input_text=json.dumps(ir)), "")
         document = self.run_rig("openapi", "--title", "Test", input_text=json.dumps(ir))
         self.assertEqual(json.loads(document)["info"]["title"], "Test")
         header = self.run_rig("embed-openapi", input_text=document)
         self.assertIn(f"openapi_json{{openapi_bytes, {len(document.encode())}}}", header)
+
+    def test_validate_reports_location_without_traceback(self):
+        ir = {"ir_version": 2, "types": [], "operations": [{}]}
+        result = subprocess.run(
+            [sys.executable, "-m", "rig", "validate"], input=json.dumps(ir),
+            text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("$.operations[0]", result.stderr)
+        self.assertIn("missing", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":

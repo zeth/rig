@@ -124,6 +124,8 @@ JSON. `rig openapi` emits OpenAPI 3.1 JSON; `rig json-codec` emits C++20
 `rig embed-openapi` emits a header containing the exact OpenAPI bytes. Each
 generator reads IR (or OpenAPI bytes for `embed-openapi`) on standard input
 and writes its result on standard output.
+Run `rig validate < rig.json` to check the shared IR contract without generating
+output. See [IR version 2](docs/ir-v2.md) for its format and current rules.
 
 Current conventions are intentionally small: a parameter named in the route
 is a path parameter; one remaining parameter becomes a JSON request body;
@@ -135,7 +137,7 @@ JSON error response. The IR currently describes `int`, `bool`,
 names. An optional field is always present and contains either a value or
 `null`. Unsupported types and ambiguous inputs fail loudly.
 Type names currently use their unqualified C++ identifier, so registering two
-types with the same short name is rejected by the OpenAPI converter.
+types with the same short name is rejected by the shared IR validator.
 Server-level HTTP errors such as malformed headers and unexpected failures
 are outside these per-operation declarations.
 The current codec generator targets public aggregate records in one named

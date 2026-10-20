@@ -19,6 +19,7 @@ generate: build/openapi.json
 	cp build/openapi.json openapi.json
 
 check: build/openapi.json
+	$(RIG) validate < build/rig.json
 	cmp build/openapi.json openapi.json
 
 clean:

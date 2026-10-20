@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
 """Embed an OpenAPI JSON document in a C++20 header without changing its bytes."""
-
-import sys
 
 
 def generate(document):
@@ -23,7 +20,3 @@ def generate(document):
         "",
     ])
     return "\n".join(lines)
-
-
-if __name__ == "__main__":
-    sys.stdout.write(generate(sys.stdin.buffer.read()))

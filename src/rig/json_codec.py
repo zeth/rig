@@ -1,31 +1,17 @@
-#!/usr/bin/env python3
 """Generate C++20 nlohmann JSON codecs from RIG's reflected declaration IR."""
 
-import argparse
-import json
 import re
-import sys
 
-
-IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
-
-
-def identifier(value):
-    if not IDENTIFIER.fullmatch(value):
-        raise ValueError(f"invalid C++ identifier: {value}")
-    return value
+from .ir import identifier, validate
 
 
 def generate(ir, namespace, api_header):
-    if ir.get("ir_version") != 2:
-        raise ValueError("unsupported RIG IR version")
+    validate(ir)
     namespace = "::".join(identifier(part) for part in namespace.split("::"))
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", api_header):
         raise ValueError("invalid API header path")
     entries = ir["types"]
     names = {identifier(entry["name"]) for entry in entries}
-    if len(names) != len(entries):
-        raise ValueError("duplicate type name")
 
     def cpp_type(ref):
         kind = ref["kind"]
@@ -116,8 +102,6 @@ def generate(ir, namespace, api_header):
 
     for entry in entries:
         name = identifier(entry["name"])
-        if entry["kind"] not in {"enum", "record"}:
-            raise ValueError(f"unsupported declaration kind: {entry['kind']}")
         qualified = f"{namespace}::{name}"
         lines += [
             f"template <> struct codec<{qualified}> {{",
@@ -133,17 +117,12 @@ def generate(ir, namespace, api_header):
         lines.append(f"inline json codec<{qualified}>::encode(const {qualified}& value) {{")
         if entry["kind"] == "enum":
             values = [identifier(value) for value in entry["values"]]
-            if len(set(values)) != len(values):
-                raise ValueError(f"duplicate enum value in {name}")
             lines.append("    switch (value) {")
             for value in values:
                 lines.append(f'    case {qualified}::{value}: return "{value}";')
             lines += ["    }", f'    throw std::invalid_argument("invalid {name}");']
         else:
             fields = entry["fields"]
-            field_names = [identifier(field["name"]) for field in fields]
-            if len(set(field_names)) != len(field_names):
-                raise ValueError(f"duplicate field in {name}")
             lines.append("    json result = json::object();")
             for field in fields:
                 field_name = field["name"]
@@ -176,15 +155,3 @@ def generate(ir, namespace, api_header):
         "} // namespace rig_json",
     ]
     return "\n".join(lines) + "\n"
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--namespace", required=True)
-    parser.add_argument("--api-header", required=True)
-    args = parser.parse_args()
-    try:
-        sys.stdout.write(generate(json.load(sys.stdin), args.namespace, args.api_header))
-    except (KeyError, ValueError) as error:
-        print(f"RIG JSON codec generation failed: {error}", file=sys.stderr)
-        sys.exit(1)
