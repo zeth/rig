@@ -38,7 +38,7 @@ class InspectorTests(unittest.TestCase):
             result = self.run_inspect(root, "inspect.cpp", "--", "-Iinclude")
             self.assertEqual(result.returncode, 0, result.stderr)
             ir = json.loads(result.stdout)
-            self.assertEqual(ir["ir_version"], 5)
+            self.assertEqual(ir["ir_version"], 6)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertEqual(ir["operations"][1]["parameters"][0]["in"], "query")
             self.assertEqual(ir["operations"][1]["parameters"][0]["range"],
@@ -131,6 +131,28 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(operation["errors"], [{
                 "status": 404, "type": {"kind": "named", "name": "sample::Failure"},
             }])
+
+    def test_reflects_operation_text_and_boolean_field_value(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                'namespace sample {\n'
+                'struct Reply { bool ok RIG_BOOL_VALUE(true); };\n'
+                'RIG_ROUTE(POST, "/bye")\n'
+                'RIG_SUMMARY("Leaving")\n'
+                'RIG_DESCRIPTION("A hint to the server.")\n'
+                'RIG_RESPONSE_DESCRIPTION("Acknowledged")\n'
+                'Reply bye();\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            ir = json.loads(result.stdout)
+            self.assertEqual(ir["types"][0]["fields"][0]["bool_value"], True)
+            operation = ir["operations"][0]
+            self.assertEqual(operation["summary"], "Leaving")
+            self.assertEqual(operation["description"], "A hint to the server.")
+            self.assertEqual(operation["response_description"], "Acknowledged")
 
     def test_compilation_failure_has_no_ir_output(self):
         with tempfile.TemporaryDirectory() as directory:

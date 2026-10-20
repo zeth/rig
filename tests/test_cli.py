@@ -21,7 +21,7 @@ class CommandTests(unittest.TestCase):
         self.assertTrue((include_dir / "rig" / "result.hpp").is_file())
 
     def test_openapi_and_embedding_use_standard_streams(self):
-        ir = {"ir_version": 5, "types": [], "operations": []}
+        ir = {"ir_version": 6, "types": [], "operations": []}
         self.assertEqual(self.run_rig("validate", input_text=json.dumps(ir)), "")
         document = self.run_rig("openapi", "--title", "Test", input_text=json.dumps(ir))
         self.assertEqual(json.loads(document)["info"]["title"], "Test")
@@ -29,7 +29,7 @@ class CommandTests(unittest.TestCase):
         self.assertIn(f"openapi_json{{openapi_bytes, {len(document.encode())}}}", header)
 
     def test_validate_reports_location_without_traceback(self):
-        ir = {"ir_version": 5, "types": [], "operations": [{}]}
+        ir = {"ir_version": 6, "types": [], "operations": [{}]}
         result = subprocess.run(
             [sys.executable, "-m", "rig", "validate"], input=json.dumps(ir),
             text=True, capture_output=True,

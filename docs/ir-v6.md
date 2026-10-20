@@ -1,4 +1,4 @@
-# RIG IR version 5
+# RIG IR version 6
 
 RIG's C++26 inspector writes one JSON object to standard output. The `rig`
 generators read that object from standard input. `rig validate < rig.json`
@@ -13,7 +13,7 @@ the order of the requested namespaces.
 
 ```json
 {
-  "ir_version": 5,
+  "ir_version": 6,
   "types": [
     {"kind": "record", "name": "Item", "cpp_name": "app::Item", "fields": [
       {"name": "id", "type": {"kind": "builtin", "name": "int"}}
@@ -98,10 +98,17 @@ dispatch uses the same precedence independently of declaration order.
 Record fields are all present in JSON. An `optional` field is present with
 either a value or `null`; it does not mean the field can be omitted. Successful
 operations have a JSON response with HTTP 200. Unknown keys and unsupported
-types are rejected so that every generator interprets version 5 the same way.
+types are rejected so that every generator interprets version 6 the same way.
 Older IR is rejected; regenerate it with `rig inspect` before running the
-version 5 generators. `json-codec` and `http-routes` use `cpp_name` and no
+version 6 generators. `json-codec` and `http-routes` use `cpp_name` and no
 longer take `--namespace`.
+
+`RIG_SUMMARY`, `RIG_DESCRIPTION`, and `RIG_RESPONSE_DESCRIPTION` annotate an
+operation with nonempty text. The first two become optional `summary` and
+`description` strings in IR; the third becomes `response_description` for the
+200 response. `RIG_BOOL_VALUE(true)` or `RIG_BOOL_VALUE(false)` on a bool
+record field emits `bool_value` in IR. OpenAPI emits a single-value boolean
+enum, and the JSON codec checks the value during both encoding and decoding.
 
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
 The IR shape is unchanged: `returns` describes the success body, and `errors`

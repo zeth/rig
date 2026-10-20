@@ -204,6 +204,15 @@ void emit_record(std::ostream& output) {
         quoted(output, std::meta::identifier_of(field));
         output << ",\"type\":";
         emit_type<std::meta::type_of(field)>(output);
+        constexpr auto bool_values = std::define_static_array(
+            std::meta::annotations_of_with_type(field, ^^rig::bool_value));
+        static_assert(bool_values.size() <= 1, "RIG fields need at most one boolean value");
+        if constexpr (bool_values.size() == 1) {
+            static_assert(std::meta::is_same_type(std::meta::type_of(field), ^^bool),
+                          "RIG_BOOL_VALUE requires a bool field");
+            constexpr auto value = [:std::meta::constant_of(bool_values[0]):];
+            output << ",\"bool_value\":" << (value.value ? "true" : "false");
+        }
         output << '}';
     }
     output << "]}";
@@ -255,6 +264,31 @@ void emit_operation(std::ostream& output) {
     quoted(output, route.method);
     output << ",\"path\":";
     quoted(output, route.path);
+    constexpr auto summaries = std::define_static_array(
+        std::meta::annotations_of_with_type(Function, ^^rig::summary));
+    static_assert(summaries.size() <= 1, "RIG operations need at most one summary");
+    if constexpr (summaries.size() == 1) {
+        constexpr auto value = [:std::meta::constant_of(summaries[0]):];
+        output << ",\"summary\":";
+        quoted(output, value.text);
+    }
+    constexpr auto descriptions = std::define_static_array(
+        std::meta::annotations_of_with_type(Function, ^^rig::description));
+    static_assert(descriptions.size() <= 1, "RIG operations need at most one description");
+    if constexpr (descriptions.size() == 1) {
+        constexpr auto value = [:std::meta::constant_of(descriptions[0]):];
+        output << ",\"description\":";
+        quoted(output, value.text);
+    }
+    constexpr auto response_descriptions = std::define_static_array(
+        std::meta::annotations_of_with_type(Function, ^^rig::response_description));
+    static_assert(response_descriptions.size() <= 1,
+                  "RIG operations need at most one success response description");
+    if constexpr (response_descriptions.size() == 1) {
+        constexpr auto value = [:std::meta::constant_of(response_descriptions[0]):];
+        output << ",\"response_description\":";
+        quoted(output, value.text);
+    }
     output << ",\"parameters\":[";
     bool first = true;
     template for (constexpr auto parameter : std::define_static_array(
@@ -307,7 +341,7 @@ void emit_operation(std::ostream& output) {
 class writer {
 public:
     explicit writer(std::ostream& output) : output_(output) {
-        output_ << "{\"ir_version\":5,\"types\":[";
+        output_ << "{\"ir_version\":6,\"types\":[";
     }
 
     template <std::meta::info Type>

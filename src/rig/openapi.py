@@ -50,7 +50,12 @@ def convert(ir, title="API", version="0.1.0"):
     for qualified, entry in types.items():
         name = schema_names[qualified]
         if entry["kind"] == "record":
-            properties = {field["name"]: schema(field["type"]) for field in entry["fields"]}
+            properties = {}
+            for field in entry["fields"]:
+                property_schema = schema(field["type"])
+                if "bool_value" in field:
+                    property_schema["enum"] = [field["bool_value"]]
+                properties[field["name"]] = property_schema
             components[name] = {
                 "type": "object",
                 "properties": properties,
@@ -109,11 +114,14 @@ def convert(ir, title="API", version="0.1.0"):
             "operationId": operation_names[operation["cpp_name"]],
             "responses": {
                 "200": {
-                    "description": "Success",
+                    "description": operation.get("response_description", "Success"),
                     "content": {"application/json": {"schema": schema(operation["returns"])}}
                 }
             },
         }
+        for key in ("summary", "description"):
+            if key in operation:
+                result[key] = operation[key]
         for error in operation.get("errors", []):
             status = error["status"]
             key = str(status)

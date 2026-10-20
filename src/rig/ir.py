@@ -1,10 +1,10 @@
-"""Validation and shared route rules for RIG IR version 5."""
+"""Validation and shared route rules for RIG IR version 6."""
 
 import re
 from collections import Counter
 
 
-VERSION = 5
+VERSION = 6
 BUILTINS = {"int", "bool", "string"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
@@ -190,8 +190,13 @@ def validate(document):
         for member_index, member in enumerate(members):
             member_location = f"{location}.{member_key}[{member_index}]"
             if kind == "record":
-                member = _object(member, member_location, ("name", "type"))
+                member = _object(member, member_location, ("name", "type"), ("bool_value",))
                 member_name = _name(member["name"], f"{member_location}.name")
+                if "bool_value" in member:
+                    if type(member["bool_value"]) is not bool or member["type"] != {
+                        "kind": "builtin", "name": "bool"
+                    }:
+                        raise ValueError(f"{member_location}.bool_value: requires a bool field")
                 label = "field"
             else:
                 member_name = _name(member, member_location)
@@ -228,8 +233,12 @@ def validate(document):
         location = f"$.operations[{index}]"
         operation = _object(
             operation, location,
-            ("name", "cpp_name", "method", "path", "parameters", "returns"), ("errors",),
+            ("name", "cpp_name", "method", "path", "parameters", "returns"),
+            ("errors", "summary", "description", "response_description"),
         )
+        for key in ("summary", "description", "response_description"):
+            if key in operation and (not isinstance(operation[key], str) or not operation[key]):
+                raise ValueError(f"{location}.{key}: expected nonempty text")
         name = _name(operation["name"], f"{location}.name")
         qualified = cpp_name(operation["cpp_name"])
         if qualified.rsplit("::", 1)[-1] != name:

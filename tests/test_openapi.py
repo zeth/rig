@@ -6,7 +6,7 @@ from rig.openapi import convert
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.ir = {
-            "ir_version": 5,
+            "ir_version": 6,
             "types": [{
                 "kind": "record", "name": "Result", "cpp_name": "sample::Result", "fields": [
                     {"name": "ok", "type": {"kind": "builtin", "name": "bool"}}
@@ -29,6 +29,20 @@ class ConversionTests(unittest.TestCase):
             operation["responses"]["200"]["content"]["application/json"]["schema"],
             {"$ref": "#/components/schemas/Result"},
         )
+
+    def test_reflected_documentation_and_boolean_value(self):
+        self.ir["types"][0]["fields"][0]["bool_value"] = True
+        self.ir["operations"][0].update(
+            summary="Leaving", description="A hint to the server.",
+            response_description="Acknowledged",
+        )
+        document = convert(self.ir)
+        self.assertEqual(document["components"]["schemas"]["Result"]["properties"]["ok"],
+                         {"type": "boolean", "enum": [True]})
+        operation = document["paths"]["/results/{id}"]["get"]
+        self.assertEqual(operation["summary"], "Leaving")
+        self.assertEqual(operation["description"], "A hint to the server.")
+        self.assertEqual(operation["responses"]["200"]["description"], "Acknowledged")
 
     def test_integer_path_advertises_generated_invalid_request(self):
         document = convert(self.ir)

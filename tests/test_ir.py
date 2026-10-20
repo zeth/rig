@@ -10,7 +10,7 @@ from rig.openapi import convert
 
 
 VALID = {
-    "ir_version": 5,
+    "ir_version": 6,
     "types": [
         {"kind": "record", "name": "Item", "cpp_name": "sample::Item", "fields": [
             {"name": "id", "type": {"kind": "builtin", "name": "int"}},
@@ -51,6 +51,21 @@ class IRValidationTests(unittest.TestCase):
         parameter["range"] = {"minimum": 1, "maximum": 20}
         parameter["type"] = {"kind": "builtin", "name": "string"}
         with self.assertRaisesRegex(ValueError, "requires int or optional<int>"):
+            validate(self.ir)
+
+    def test_boolean_value_and_operation_text_validation(self):
+        field = self.ir["types"][0]["fields"][0]
+        field["bool_value"] = True
+        with self.assertRaisesRegex(ValueError, "requires a bool field"):
+            validate(self.ir)
+        field["type"] = {"kind": "builtin", "name": "bool"}
+        self.assertIs(validate(self.ir), self.ir)
+        field["bool_value"] = 1
+        with self.assertRaisesRegex(ValueError, "requires a bool field"):
+            validate(self.ir)
+        field["bool_value"] = False
+        self.ir["operations"][0]["summary"] = ""
+        with self.assertRaisesRegex(ValueError, "expected nonempty text"):
             validate(self.ir)
 
     def test_structure_and_references(self):

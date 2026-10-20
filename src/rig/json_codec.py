@@ -124,6 +124,11 @@ def generate(ir, api_header):
             lines.append("    json result = json::object();")
             for field in fields:
                 field_name = field["name"]
+                if "bool_value" in field:
+                    lines.append(
+                        f'    if (value.{field_name} != {str(field["bool_value"]).lower()}) '
+                        f'throw std::invalid_argument("invalid {field_name}");'
+                    )
                 lines.append(
                     f'    result["{field_name}"] = codec<{cpp_type(field["type"])}>::encode(value.{field_name});'
                 )
@@ -139,6 +144,12 @@ def generate(ir, api_header):
             for field in fields:
                 lines.append(f'        || !value.contains("{field["name"]}")')
             lines.append(f') throw std::invalid_argument("expected {name}");')
+            for field in fields:
+                if "bool_value" in field:
+                    lines.append(
+                        f'    if (value.at("{field["name"]}") != {str(field["bool_value"]).lower()}) '
+                        f'throw std::invalid_argument("invalid {field["name"]}");'
+                    )
             lines.append(f"    return {qualified}{{")
             for field in fields:
                 lines.append(
