@@ -22,6 +22,8 @@ Something instead of the same boring examples.
 `api.hpp` is the C++20 API declaration used by RIG's reflection prototype.
 `openapi.json` is generated from it. `game.cpp` implements a small deterministic
 simulation, and `server.cpp` serves the declared routes on localhost.
+The server compiles a C++20 JSON codec generated from the same reflected API
+data as `openapi.json`; its route dispatch and HTTP handling remain local.
 `inspect.cpp` nominates the `dodger` namespace; RIG discovers the annotated
 operations and their reachable types without a separate declaration list.
 The routes declare a shared `ErrorResponse` type and their 400, 404, and 409

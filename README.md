@@ -116,10 +116,11 @@ signatures. `examples/catalog/inspect.cpp` still demonstrates explicit
 registration. The writer extracts route annotations, parameters, return
 types, typed error responses, record fields, and enum values into RIG IR JSON.
 `tools/openapi.py` converts that IR to OpenAPI 3.1 JSON with Python's standard
-library. The catalog example has no dependency on Dodger and exercises the
-same pipeline with a different API. This split remains an experiment; the
-examples do not yet establish whether the final OpenAPI generator belongs in
-Python or C++.
+library. `tools/json_codec.py` also generates a C++20 JSON codec header from
+the same IR for Dodger's server. The catalog example has no dependency on
+Dodger and exercises the same pipeline with a different API. This split
+remains an experiment; the examples do not yet establish whether the final
+OpenAPI generator belongs in Python or C++.
 
 Current conventions are intentionally small: a parameter named in the route
 is a path parameter; one remaining parameter becomes a JSON request body;
@@ -134,6 +135,8 @@ Type names currently use their unqualified C++ identifier, so registering two
 types with the same short name is rejected by the OpenAPI converter.
 Server-level HTTP errors such as malformed headers and unexpected failures
 are outside these per-operation declarations.
+The current codec generator targets public aggregate records in one named
+namespace, matching Dodger's API.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
 selected functions with `RIG_ROUTE`, and nominate the containing namespace in
@@ -169,6 +172,7 @@ the HTTP routes, and a terminal client for the human player. The bot and
 client use only Python's standard library. See `dodger/README.md` for
 controls and standalone commands.
 
-The HTTP server's JSON encoding is still written by hand. This is a concrete
-integration boundary to investigate before claiming RIG can keep a server's
-wire representation in sync with its generated OpenAPI contract.
+Dodger's HTTP server uses the generated codec to encode its state and error
+responses and decode actions. Routing and HTTP framing remain in the server.
+`make check` tests codec round trips, invalid actions, and live responses
+against the generated OpenAPI schemas.

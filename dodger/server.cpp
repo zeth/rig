@@ -1,4 +1,5 @@
 #include <dodger/game.hpp>
+#include <build/dodger_json.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -37,64 +38,14 @@ struct Request {
     std::string body;
 };
 
-std::string name(dodger::GameStatus value) {
-    switch (value) {
-    case dodger::GameStatus::Waiting: return "Waiting";
-    case dodger::GameStatus::Running: return "Running";
-    case dodger::GameStatus::Finished: return "Finished";
-    }
-    throw std::logic_error("invalid status");
-}
-
-std::string name(dodger::Winner value) {
-    switch (value) {
-    case dodger::Winner::Human: return "Human";
-    case dodger::Winner::Bot: return "Bot";
-    case dodger::Winner::Draw: return "Draw";
-    }
-    throw std::logic_error("invalid winner");
-}
-
-json encode(const dodger::GameState& state) {
-    json obstacles = json::array();
-    for (const auto& obstacle : state.obstacles)
-        obstacles.push_back({{"x", obstacle.x}, {"y", obstacle.y},
-                             {"width", obstacle.width}});
-    return {
-        {"id", state.id},
-        {"tick", state.tick},
-        {"arena_width", state.arena_width},
-        {"arena_height", state.arena_height},
-        {"status", name(state.status)},
-        {"human", {{"x", state.human.x}, {"lives", state.human.lives},
-                    {"shove_cooldown_ticks", state.human.shove_cooldown_ticks}}},
-        {"bot", {{"x", state.bot.x}, {"lives", state.bot.lives},
-                  {"shove_cooldown_ticks", state.bot.shove_cooldown_ticks}}},
-        {"obstacles", std::move(obstacles)},
-        {"winner", state.winner ? json(name(*state.winner)) : json(nullptr)},
-    };
-}
-
-json encode(const dodger::ErrorResponse& response) {
-    return {{"error", response.error}};
-}
-
 dodger::Action decode_action(const std::string& body) {
-    json value;
     try {
-        value = json::parse(body);
-    } catch (const json::exception&) {
-        throw HttpError(400, "invalid JSON body");
+        return rig_json::decode<dodger::Action>(json::parse(body));
+    } catch (const json::exception& error) {
+        throw HttpError(400, error.what());
+    } catch (const std::invalid_argument& error) {
+        throw HttpError(400, error.what());
     }
-    if (!value.is_object() || value.size() != 2 ||
-        !value.contains("move") || !value.contains("shove") ||
-        !value["move"].is_string() || !value["shove"].is_boolean())
-        throw HttpError(400, "expected action with move and shove");
-    const auto move = value["move"].get<std::string>();
-    if (move == "Left") return {dodger::Move::Left, value["shove"].get<bool>()};
-    if (move == "Stay") return {dodger::Move::Stay, value["shove"].get<bool>()};
-    if (move == "Right") return {dodger::Move::Right, value["shove"].get<bool>()};
-    throw HttpError(400, "unknown move");
 }
 
 Request read_request(int client) {
@@ -158,13 +109,13 @@ json dispatch(const Request& request) {
     std::smatch match;
     try {
         if (request.method == "GET" && std::regex_match(request.path, match, game_route))
-            return encode(dodger::get_game(std::stoi(match[1])));
+            return rig_json::encode(dodger::get_game(std::stoi(match[1])));
         if (request.method == "POST" && std::regex_match(request.path, match, action_route)) {
             const int id = std::stoi(match[1]);
             const int player = std::stoi(match[2]);
             auto action = decode_action(request.body);
-            return encode(player == 1 ? dodger::submit_human_action(id, action)
-                                      : dodger::submit_action(id, action));
+            return rig_json::encode(player == 1 ? dodger::submit_human_action(id, action)
+                                              : dodger::submit_action(id, action));
         }
     } catch (const std::out_of_range&) {
         throw HttpError(404, "unknown game");
@@ -200,10 +151,10 @@ void handle_client(int client) {
     try {
         send_response(client, 200, dispatch(read_request(client)));
     } catch (const HttpError& error) {
-        send_response(client, error.status, encode(dodger::ErrorResponse{error.what()}));
+        send_response(client, error.status, rig_json::encode(dodger::ErrorResponse{error.what()}));
     } catch (const std::exception& error) {
         std::cerr << "request failed: " << error.what() << '\n';
-        send_response(client, 500, encode(dodger::ErrorResponse{"internal server error"}));
+        send_response(client, 500, rig_json::encode(dodger::ErrorResponse{"internal server error"}));
     }
 }
 
