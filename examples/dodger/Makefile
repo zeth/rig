@@ -5,6 +5,7 @@ RIG_SOURCE ?=
 RIG_INCLUDE = $(shell $(RIG) include-dir)
 CLIENT_PYTHON = build/client-venv/bin/python
 CLIENT_BIN = $(abspath build/client-venv/bin)
+PLAY_ARGS ?=
 
 .DELETE_ON_ERROR:
 
@@ -58,7 +59,7 @@ server: build/dodger-server
 	./build/dodger-server
 
 play: build/dodger-server build/dodger-client.ready
-	$(CLIENT_PYTHON) play.py
+	$(CLIENT_PYTHON) play.py $(PLAY_ARGS)
 
 check: build/openapi.json build/dodger-server build/game-test build/json-codec-test build/result-route-test build/dodger-client.ready
 	$(RIG) validate < build/rig.json

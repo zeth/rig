@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "build"))
 
 from dodger_api_client import Client
-from dodger_api_client.api.default import get_game, submit_action, submit_human_action
+from dodger_api_client.api.default import create_game, get_game, submit_action, submit_human_action
 from dodger_api_client.models import Action, ErrorResponse, GameState, Move
 
 
@@ -103,9 +103,29 @@ def main():
         assert state["winner"] is None
 
         with Client(base_url=base, raise_on_unexpected_status=True) as client:
+            default_game = create_game.sync_detailed(client=client)
+            assert default_game.status_code == HTTPStatus.OK
+            assert isinstance(default_game.parsed, GameState)
+            assert (default_game.parsed.arena_width, default_game.parsed.arena_height) == (20, 12)
+            width_only = create_game.sync_detailed(client=client, width=18)
+            assert width_only.status_code == HTTPStatus.OK
+            assert isinstance(width_only.parsed, GameState)
+            assert (width_only.parsed.arena_width, width_only.parsed.arena_height) == (18, 12)
+            custom_game = create_game.sync_detailed(client=client, width=16, height=9)
+            assert custom_game.status_code == HTTPStatus.OK
+            assert isinstance(custom_game.parsed, GameState)
+            assert (custom_game.parsed.arena_width, custom_game.parsed.arena_height) == (16, 9)
+            assert custom_game.parsed.tick == 0
+            create_schema = spec["paths"]["/games"]["post"]["responses"]["200"]
+            validate(custom_game.parsed.to_dict(),
+                     create_schema["content"]["application/json"]["schema"], components)
+            invalid_size = create_game.sync_detailed(client=client, width=7)
+            assert invalid_size.status_code == HTTPStatus.BAD_REQUEST
+            assert isinstance(invalid_size.parsed, ErrorResponse)
             found = get_game.sync_detailed(id=1, client=client)
             assert found.status_code == HTTPStatus.OK
             assert isinstance(found.parsed, GameState)
+            assert (found.parsed.arena_width, found.parsed.arena_height) == (16, 9)
             missing = get_game.sync_detailed(id=2, client=client)
             assert missing.status_code == HTTPStatus.NOT_FOUND
             assert isinstance(missing.parsed, ErrorResponse)
@@ -157,6 +177,8 @@ def main():
                     "/games/{id}/players/2/actions", 400)
         check_error(base + "/games/999999999999999999999", "GET", None,
                     "/games/{id}", 400)
+        check_error(base + "/games?width=no", "POST", None, "/games", 400)
+        check_error(base + "/games?width=16&width=20", "POST", None, "/games", 400)
         check_error(base + "/games/2/players/1/actions", "POST", action,
                     "/games/{id}/players/1/actions", 404)
         for player in (1, 2):

@@ -40,12 +40,17 @@ winner is `null` until the game ends. Both players start with three lives and
 the same movement speed and shove cooldown. Obstacles appear every five ticks;
 the game runs at about 30 ticks per second after each player submits an action.
 The most recent action remains in effect until that player sends another.
+`POST /games` starts a fresh game. Optional `width` and `height` query parameters
+set the arena to 8–80 columns and 6–40 rows; omitting either uses 20 or 12.
+RIG reflects these parameters into OpenAPI, and its generated dispatcher decodes
+them before calling the game.
 
 Install RIG, then from this directory run `make server`. Use either player endpoint:
 
 ```sh
 curl http://127.0.0.1:8765/games/1
 curl http://127.0.0.1:8765/openapi.json
+curl -X POST 'http://127.0.0.1:8765/games?width=32&height=16'
 curl -X POST http://127.0.0.1:8765/games/1/players/1/actions \
   -H 'Content-Type: application/json' -d '{"move":"Right","shove":false}'
 curl -X POST http://127.0.0.1:8765/games/1/players/2/actions \
@@ -56,6 +61,8 @@ For a playable match, run `make play` in a terminal. It starts the server, a
 Python bot using the client generated from OpenAPI, and a terminal client for
 the human player. The first run installs the pinned client tools in an ignored
 virtual environment under `build/`.
+Use `make play PLAY_ARGS='--width 32 --height 16'` to choose the arena size.
+The launcher creates the game through the generated client before play begins.
 
 Use A/D or the arrow keys to move, Space to shove, and Q to quit. Hold a
 movement key to keep moving; the most recent key is applied for one client
@@ -68,6 +75,6 @@ same movement and shove rules as the human client. After `make check` or
 `make play` generates the client, `build/client-venv/bin/python bot.py`
 can also connect to a separately running `make server` instance.
 
-The demo hosts one game (`id` 1). The HTTP listener is intentionally limited
-to localhost and basic JSON requests. `GET /openapi.json` serves the generated
-contract embedded in the server binary.
+The demo hosts one game (`id` 1), which `POST /games` resets. The HTTP listener
+is intentionally limited to localhost and basic JSON requests.
+`GET /openapi.json` serves the generated contract embedded in the server binary.

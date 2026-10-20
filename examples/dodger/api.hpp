@@ -46,10 +46,15 @@ struct ErrorResponse {
 };
 
 using GameLookup = rig::result<GameState, rig::error<404, ErrorResponse>>;
+using CreateResult = rig::result<GameState, rig::error<400, ErrorResponse>>;
 using ActionResult = rig::result<GameState,
     rig::error<400, ErrorResponse>,
     rig::error<404, ErrorResponse>,
     rig::error<409, ErrorResponse>>;
+
+RIG_ROUTE(POST, "/games")
+CreateResult create_game(std::optional<int> width RIG_QUERY,
+                         std::optional<int> height RIG_QUERY);
 
 RIG_ROUTE(GET, "/games/{id}")
 GameLookup get_game(int id);

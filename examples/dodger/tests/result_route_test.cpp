@@ -19,4 +19,18 @@ int main() {
         "POST", "/games/1/players/2/actions", R"({"move":"Stay","shove":false})");
     assert(response && response->status == 409);
     assert(response->body["error"] == "game finished");
+
+    const auto invalid_query = rig_http::dispatch("POST", "/games?width=no", "");
+    assert(invalid_query && invalid_query->status == 400);
+    assert(invalid_query->body["code"] == "invalid_request");
+    const auto invalid_size = rig_http::dispatch("POST", "/games?width=7", "");
+    assert(invalid_size && invalid_size->status == 400);
+    assert(invalid_size->body["error"].is_string());
+    const auto invalid_height = rig_http::dispatch("POST", "/games?height=41", "");
+    assert(invalid_height && invalid_height->status == 400);
+    assert(invalid_height->body["error"].is_string());
+    const auto created = rig_http::dispatch("POST", "/games?width=12&height=8", "");
+    assert(created && created->status == 200);
+    assert(created->body["arena_width"] == 12 && created->body["arena_height"] == 8);
+    assert(created->body["status"] == "Waiting" && created->body["tick"] == 0);
 }

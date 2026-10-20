@@ -81,8 +81,6 @@ Request read_request(int client) {
             if (length > body_limit) throw HttpError(413, "body too large");
         }
     }
-    if (request.method == "POST" && !has_length)
-        throw HttpError(411, "content length required");
     request.body = data.substr(header_end + 4);
     while (request.body.size() < length) {
         const auto count = recv(client, buffer, sizeof(buffer), 0);
@@ -104,7 +102,6 @@ void send_response(int client, int status, std::string_view payload) {
     if (status == 400) reason = "Bad Request";
     if (status == 404) reason = "Not Found";
     if (status == 409) reason = "Conflict";
-    if (status == 411) reason = "Length Required";
     if (status == 413) reason = "Content Too Large";
     if (status == 500) reason = "Internal Server Error";
     const auto response = "HTTP/1.1 " + std::to_string(status) + " " + reason +

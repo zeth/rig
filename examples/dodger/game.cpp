@@ -21,9 +21,13 @@ int direction(Move move) {
 
 } // namespace
 
-Game::Game()
-    : state_{1, 0, 20, 12, GameStatus::Waiting,
-             {5, kLives, 0}, {14, kLives, 0}, {}, std::nullopt} {}
+Game::Game(int width, int height)
+    : state_{1, 0, width, height, GameStatus::Waiting,
+             {width / 4, kLives, 0}, {width - 1 - width / 4, kLives, 0},
+             {}, std::nullopt} {
+    if (width < 8 || width > 80 || height < 6 || height > 40)
+        throw std::invalid_argument("arena width must be 8 to 80 and height 6 to 40");
+}
 
 void Game::set_action(int player, Action action) {
     if (player < 1 || player > 2) throw std::out_of_range("unknown player");
@@ -89,6 +93,15 @@ void Game::tick() {
 Game& game_instance() {
     static Game game;
     return game;
+}
+
+CreateResult create_game(std::optional<int> width, std::optional<int> height) {
+    try {
+        game_instance() = Game(width.value_or(20), height.value_or(12));
+        return game_instance().state();
+    } catch (const std::invalid_argument& error) {
+        return rig::error<400, ErrorResponse>{{error.what()}};
+    }
 }
 
 GameLookup get_game(int id) {

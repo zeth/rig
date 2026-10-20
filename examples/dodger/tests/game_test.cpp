@@ -4,6 +4,9 @@
 
 int main() {
     dodger::Game game;
+    dodger::Game small(8, 6);
+    assert(small.state().arena_width == 8 && small.state().arena_height == 6);
+    assert(small.state().human.x == 2 && small.state().bot.x == 5);
     assert(game.state().status == dodger::GameStatus::Waiting);
     game.tick();
     assert(game.state().tick == 0);

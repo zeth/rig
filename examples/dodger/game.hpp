@@ -8,7 +8,7 @@ namespace dodger {
 
 class Game {
 public:
-    Game();
+    Game(int width = 20, int height = 12);
     const GameState& state() const { return state_; }
     void set_action(int player, Action action);
     void tick();
