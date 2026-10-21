@@ -57,13 +57,15 @@ class ConversionTests(unittest.TestCase):
         )
 
     def test_external_context_is_not_an_http_parameter_or_generated_400(self):
-        self.ir["operations"][0]["context_parameters"] = ["database"]
+        self.ir["operations"][0]["context_parameters"] = [
+            {"name": "database", "position": 0}]
         document = convert(self.ir)
         operation = document["paths"]["/results/{id}"]["get"]
         self.assertEqual([item["name"] for item in operation["parameters"]], ["id"])
         self.assertNotIn("400", operation["responses"])
-        with self.assertRaisesRegex(ValueError, "cannot supply context parameters"):
-            generate_routes(self.ir, "codec.hpp")
+        routes = generate_routes(self.ir, "codec.hpp")
+        self.assertIn("template <typename Context>", routes)
+        self.assertIn("sample::get_result(context.database, std::move(*argument_0))", routes)
 
     def test_omittable_nullable_and_numeric_fields(self):
         self.ir["types"][0]["fields"].extend([

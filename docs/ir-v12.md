@@ -129,11 +129,12 @@ enum, and the JSON codec checks the value during both encoding and decoding.
 `RIG_FIELD_DESCRIPTION(text)` and `RIG_MINIMUM(value)` annotate record fields.
 The latter requires an `int` field. Both appear in the field IR and its OpenAPI
 property schema. A `RIG_CONTEXT` parameter is supplied by the hosting server,
-so it is listed by name in `context_parameters` rather than HTTP `parameters`.
-OpenAPI ignores it. The generated HTTP dispatcher rejects operations with
-context parameters because it has no provider for those values. Since the
-hosting server also handles request parsing, OpenAPI does not add RIG's
-generated invalid-request response for these operations.
+so it is listed with its name and zero-based position in `context_parameters`
+rather than HTTP `parameters`. OpenAPI ignores it. The generated HTTP
+dispatcher accepts a context object and reads members with matching names,
+preserving the original C++ argument order. The hosting server can translate
+decoding failures returned by generated dispatch, so OpenAPI does not add a
+synthetic invalid-request response for these operations.
 
 `RIG_ERROR_RESPONSE(status, Body, "Description")` declares an additional
 HTTP error response supplied outside the function, such as by authentication

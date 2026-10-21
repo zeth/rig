@@ -8,8 +8,7 @@ from .ir import identifier, query_value_type, route_pattern, route_priority, val
 
 def generate(ir, codec_header):
     validate(ir)
-    if any(operation.get("context_parameters") for operation in ir["operations"]):
-        raise ValueError("HTTP route generation cannot supply context parameters")
+    has_context = any(operation.get("context_parameters") for operation in ir["operations"])
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", codec_header):
         raise ValueError("invalid codec header path")
 
@@ -142,9 +141,11 @@ def generate(ir, codec_header):
         "        throw std::invalid_argument(error.what());",
         "    }",
         "}",
+        *(["template <typename Context>"] if has_context else []),
         "inline std::optional<response> dispatch(const std::string& method,",
         "                                    const std::string& path,",
-        "                                    const std::string& body) {",
+        "                                    const std::string& body" +
+        (", Context& context) {" if has_context else ") {"),
         "    const auto query_start = path.find('?');",
         "    const auto route_path = path.substr(0, query_start);",
     ]
@@ -231,7 +232,12 @@ def generate(ir, codec_header):
                 "            return invalid_request(error.what());",
                 "        }",
             ]
-        call = f"{operation['cpp_name']}({', '.join(arguments)})"
+        contexts = {item["position"]: f'context.{identifier(item["name"])}'
+                    for item in operation.get("context_parameters", [])}
+        supplied = iter(arguments)
+        call_arguments = [contexts[index] if index in contexts else next(supplied)
+                          for index in range(len(arguments) + len(contexts))]
+        call = f"{operation['cpp_name']}({', '.join(call_arguments)})"
         if operation["result"]:
             success = cpp_type(operation["returns"])
             lines += [

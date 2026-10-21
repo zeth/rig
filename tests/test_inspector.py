@@ -100,7 +100,8 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["ir_version"], 12)
             self.assertEqual(ir["operations"][0]["path"], "/items/{id}")
             self.assertIs(ir["operations"][0]["result"], False)
-            self.assertEqual(ir["operations"][0]["context_parameters"], ["context"])
+            self.assertEqual(ir["operations"][0]["context_parameters"],
+                             [{"name": "context", "position": 0}])
             self.assertEqual([p["name"] for p in ir["operations"][0]["parameters"]], ["id"])
             self.assertEqual(ir["operations"][1]["parameters"][0]["in"], "query")
             self.assertEqual(ir["operations"][1]["parameters"][0]["range"],

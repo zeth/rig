@@ -295,10 +295,16 @@ def validate(document):
         context_parameters = _array(operation.get("context_parameters", []),
                                     f"{location}.context_parameters")
         context_names = set()
-        for context_index, context_name in enumerate(context_parameters):
-            context_name = _name(context_name,
-                                 f"{location}.context_parameters[{context_index}]")
+        context_positions = set()
+        for context_index, context in enumerate(context_parameters):
+            context_location = f"{location}.context_parameters[{context_index}]"
+            context = _object(context, context_location, ("name", "position"))
+            context_name = _name(context["name"], f"{context_location}.name")
             _unique(context_names, context_name, location, "context parameter")
+            position = context["position"]
+            if type(position) is not int or not 0 <= position < len(parameters) + len(context_parameters):
+                raise ValueError(f"{context_location}.position: invalid parameter position")
+            _unique(context_positions, position, location, "context parameter position")
         parameter_names = set()
         by_name = {}
         for parameter_index, parameter in enumerate(parameters):

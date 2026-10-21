@@ -133,6 +133,9 @@ and writes its result on standard output.
 or compiles an explicit entry point. It runs the inspector, validates its IR,
 and writes that IR to standard output. Pass application include paths and
 other compiler flags after `--`; use `--cxx` to select a compiler.
+For an operation with `RIG_CONTEXT` parameters, generated HTTP dispatch accepts
+a host context object whose members match those parameter names. The context
+is excluded from OpenAPI and passed to the C++ operation in declaration order.
 Run `rig validate < rig.json` to check the shared IR contract without generating
 output. See [IR version 12](docs/ir-v12.md) for its format and current rules.
 Use `RIG_RANGE(minimum, maximum)` on an integer parameter to publish inclusive

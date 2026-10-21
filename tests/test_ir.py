@@ -198,6 +198,24 @@ class IRValidationTests(unittest.TestCase):
         self.ir["types"].append(other)
         self.assertIs(validate(self.ir), self.ir)
 
+    def test_context_positions_follow_the_cpp_signature(self):
+        operation = self.ir["operations"][0]
+        operation["context_parameters"] = [
+            {"name": "database", "position": 0},
+            {"name": "audit", "position": 2},
+        ]
+        routes = http_routes(self.ir, "codec.hpp")
+        self.assertIn(
+            "sample::get_item(context.database, std::move(*argument_0), context.audit)",
+            routes,
+        )
+        operation["context_parameters"][1]["position"] = 0
+        with self.assertRaisesRegex(ValueError, "duplicate context parameter position"):
+            validate(self.ir)
+        operation["context_parameters"][1]["position"] = 3
+        with self.assertRaisesRegex(ValueError, "invalid parameter position"):
+            validate(self.ir)
+
     def test_equivalent_parameterized_paths_are_rejected(self):
         other = copy.deepcopy(self.ir["operations"][0])
         other["name"] = "get_by_slug"

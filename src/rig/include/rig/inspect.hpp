@@ -475,6 +475,7 @@ void emit_operation(std::ostream& output) {
     }
     output << "],\"context_parameters\":[";
     first = true;
+    int position = 0;
     template for (constexpr auto parameter : std::define_static_array(
         std::meta::parameters_of(Function))) {
         constexpr auto contexts = std::define_static_array(
@@ -482,8 +483,11 @@ void emit_operation(std::ostream& output) {
         if constexpr (contexts.size() == 1) {
             if (!first) output << ',';
             first = false;
+            output << "{\"name\":";
             quoted(output, std::meta::identifier_of(parameter));
+            output << ",\"position\":" << position << '}';
         }
+        ++position;
     }
     output << "],\"returns\":";
     constexpr auto return_type = std::meta::remove_cvref(std::meta::return_type_of(Function));
