@@ -113,7 +113,8 @@ in the package. `src/rig/include/rig/route.hpp` supplies C++20 annotations;
 transforms the reflected IR. `tests/` contains RIG tests. Each directory in
 `examples/` has its own build and checks and uses only the installed `rig`
 command and headers. Dodger is a complete example app; Catalog is a small
-contract example.
+contract example. `docs/performance.md` records the runtime cost of generated
+code and how to reduce it if it ever matters.
 
 Install locally with `python3 -m pip install .`, then run `rig --help` and
 `rig include-dir` to find the installed C++ headers. To check this checkout,
