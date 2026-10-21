@@ -268,6 +268,18 @@ void emit_record(std::ostream& output) {
             constexpr auto value = [:std::meta::constant_of(minimums[0]):];
             output << ",\"minimum\":" << value.value;
         }
+        constexpr auto string_choices = std::define_static_array(
+            std::meta::annotations_of_with_type(field, ^^rig::string_values));
+        static_assert(string_choices.size() <= 1, "RIG fields need at most one string enum");
+        if constexpr (string_choices.size() == 1) {
+            constexpr auto value = [:std::meta::constant_of(string_choices[0]):];
+            output << ",\"string_values\":[";
+            for (int index = 0; index < value.count; ++index) {
+                if (index) output << ',';
+                quoted(output, value.values[index]);
+            }
+            output << ']';
+        }
         constexpr auto omit_empty = std::define_static_array(
             std::meta::annotations_of_with_type(field, ^^rig::omit_empty));
         constexpr auto nullable = std::define_static_array(

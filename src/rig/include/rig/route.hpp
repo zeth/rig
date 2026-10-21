@@ -4,7 +4,9 @@
 // declaration valid under GCC's experimental C++26 reflection implementation.
 #ifdef RIG_GENERATING
 #include <cstddef>
+#include <initializer_list>
 #include <meta>
+#include <string_view>
 namespace rig {
 struct route {
     char method[8];
@@ -19,6 +21,20 @@ consteval int_values make_int_values() {
     static_assert(sizeof...(Values) > 0 && sizeof...(Values) <= 16,
                   "RIG integer choices require one to sixteen values");
     return {{Values...}, static_cast<int>(sizeof...(Values))};
+}
+struct string_values { char values[16][64]{}; int count = 0; };
+consteval string_values make_string_values(std::initializer_list<std::string_view> values) {
+    if (values.size() == 0 || values.size() > 16)
+        throw "RIG string choices require one to sixteen values";
+    string_values result{};
+    for (auto value : values) {
+        if (value.empty() || value.size() >= 64)
+            throw "RIG string choices must contain one to 63 characters";
+        for (std::size_t index = 0; index < value.size(); ++index)
+            result.values[result.count][index] = value[index];
+        ++result.count;
+    }
+    return result;
 }
 struct parameter_description { char text[512]; };
 struct minimum { int value; };
@@ -44,6 +60,7 @@ struct error_response {
 #define RIG_CONTEXT [[=::rig::context{}]]
 #define RIG_RANGE(minimum, maximum) [[=::rig::range{minimum, maximum}]]
 #define RIG_INT_VALUES(...) [[=::rig::make_int_values<__VA_ARGS__>()]]
+#define RIG_STRING_VALUES(...) [[=::rig::make_string_values({__VA_ARGS__})]]
 #define RIG_PARAMETER_DESCRIPTION(text) [[=::rig::parameter_description{text}]]
 #define RIG_MINIMUM(value) [[=::rig::minimum{value}]]
 #define RIG_FIELD_DESCRIPTION(text) [[=::rig::field_description{text}]]
@@ -65,6 +82,7 @@ struct error_response {
 #define RIG_CONTEXT
 #define RIG_RANGE(minimum, maximum)
 #define RIG_INT_VALUES(...)
+#define RIG_STRING_VALUES(...)
 #define RIG_PARAMETER_DESCRIPTION(text)
 #define RIG_MINIMUM(value)
 #define RIG_FIELD_DESCRIPTION(text)

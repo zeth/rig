@@ -128,8 +128,12 @@ enum, and the JSON codec checks the value during both encoding and decoding.
 
 `RIG_FIELD_DESCRIPTION(text)` and `RIG_MINIMUM(value)` annotate record fields.
 The latter requires an `int` field. Both appear in the field IR and its OpenAPI
-property schema. A `RIG_CONTEXT` parameter is supplied by the hosting server,
-so it is listed with its name and zero-based position in `context_parameters`
+property schema. `RIG_STRING_VALUES(...)` limits a string field (or an
+omittable optional string field) to one of up to sixteen nonempty values. The
+JSON codec checks the values in both directions, and OpenAPI emits a string
+`enum`. A described reference field uses `allOf` around its reference so the
+description remains beside it. A `RIG_CONTEXT` parameter is supplied by the
+hosting server, so it is listed with its name and zero-based position in `context_parameters`
 rather than HTTP `parameters`. OpenAPI ignores it. The generated HTTP
 dispatcher accepts a context object and reads members with matching names,
 preserving the original C++ argument order. The hosting server can translate

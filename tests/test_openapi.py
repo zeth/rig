@@ -56,6 +56,26 @@ class ConversionTests(unittest.TestCase):
             {"type": "integer", "minimum": 1, "description": "Live items."},
         )
 
+    def test_string_choices_and_described_reference(self):
+        self.ir["types"].append({
+            "kind": "record", "name": "Detail", "cpp_name": "sample::Detail",
+            "fields": [{"name": "name", "type": {"kind": "builtin", "name": "string"}}],
+        })
+        self.ir["types"][0]["fields"].extend([
+            {"name": "status", "type": {"kind": "builtin", "name": "string"},
+             "string_values": ["live", "trashed"]},
+            {"name": "detail", "type": {"kind": "optional", "value": {
+                "kind": "named", "name": "sample::Detail"}}, "omit_empty": True,
+             "description": "Present when resolved."},
+        ])
+        properties = convert(self.ir)["components"]["schemas"]["Result"]["properties"]
+        self.assertEqual(properties["status"],
+                         {"type": "string", "enum": ["live", "trashed"]})
+        self.assertEqual(properties["detail"], {
+            "allOf": [{"$ref": "#/components/schemas/Detail"}],
+            "description": "Present when resolved.",
+        })
+
     def test_external_context_is_not_an_http_parameter_or_generated_400(self):
         self.ir["operations"][0]["context_parameters"] = [
             {"name": "database", "position": 0}]

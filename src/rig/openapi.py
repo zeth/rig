@@ -70,6 +70,10 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                     property_schema["type"] = [property_schema["type"], "null"]
                 if "bool_value" in field:
                     property_schema["enum"] = [field["bool_value"]]
+                if "string_values" in field:
+                    property_schema["enum"] = field["string_values"]
+                if "description" in field and "$ref" in property_schema:
+                    property_schema = {"allOf": [property_schema]}
                 for key in ("description", "minimum"):
                     if key in field:
                         property_schema[key] = field[key]

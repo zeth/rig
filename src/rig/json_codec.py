@@ -1,5 +1,6 @@
 """Generate C++20 nlohmann JSON codecs from RIG's reflected declaration IR."""
 
+import json
 import re
 
 from .ir import identifier, validate
@@ -147,6 +148,16 @@ def generate(ir, api_header):
                         f'    if (value.{field_name} != {str(field["bool_value"]).lower()}) '
                         f'throw std::invalid_argument("invalid {field_name}");'
                     )
+                if "string_values" in field:
+                    value = f'*value.{field_name}' if field.get("omit_empty") else f'value.{field_name}'
+                    invalid = " && ".join(
+                        f'{value} != {json.dumps(choice)}' for choice in field["string_values"]
+                    )
+                    present = f'value.{field_name} && ' if field.get("omit_empty") else ''
+                    lines.append(
+                        f'    if ({present}{invalid}) '
+                        f'throw std::invalid_argument("invalid {field_name}");'
+                    )
                 assignment = (
                     f'    result["{field_name}"] = '
                     f'codec<{cpp_type(field["type"])}>::encode(value.{field_name});'
@@ -181,6 +192,19 @@ def generate(ir, api_header):
                     lines.append(
                         f'    if (value.at("{field["name"]}") != {str(field["bool_value"]).lower()}) '
                         f'throw std::invalid_argument("invalid {field["name"]}");'
+                    )
+                if "string_values" in field:
+                    field_name = field["name"]
+                    invalid = " && ".join(
+                        f'value.at("{field_name}") != {json.dumps(choice)}'
+                        for choice in field["string_values"]
+                    )
+                    present = (f'value.contains("{field_name}") && '
+                               f'!value.at("{field_name}").is_null() && '
+                               if field.get("omit_empty") else '')
+                    lines.append(
+                        f'    if ({present}{invalid}) '
+                        f'throw std::invalid_argument("invalid {field_name}");'
                     )
             lines.append(f"    return {qualified}{{")
             for field in fields:

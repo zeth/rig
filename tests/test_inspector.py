@@ -79,7 +79,8 @@ class InspectorTests(unittest.TestCase):
                 'struct Item { int value RIG_MINIMUM(1) RIG_FIELD_DESCRIPTION("Count"); '
                 'long long updated_at; double percent; '
                 'std::optional<std::string> label RIG_OMIT_EMPTY; '
-                'std::optional<std::string> error RIG_NULLABLE; };\n'
+                'std::optional<std::string> error RIG_NULLABLE; '
+                'std::string state RIG_STRING_VALUES("live", "trashed"); };\n'
                 'RIG_ROUTE(GET, "/items/{id}") Item get_item(Context& context RIG_CONTEXT, int id);\n'
                 'RIG_ROUTE(GET, "/items") Item list_items(int limit RIG_QUERY RIG_RANGE(1, 20));\n'
                 'RIG_ROUTE(GET, "/choices") Item choices('
@@ -116,6 +117,8 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["types"][0]["fields"][2]["type"]["name"], "double")
             self.assertTrue(ir["types"][0]["fields"][3]["omit_empty"])
             self.assertTrue(ir["types"][0]["fields"][4]["nullable"])
+            self.assertEqual(ir["types"][0]["fields"][5]["string_values"],
+                             ["live", "trashed"])
             generated = self.run_inspect(
                 root, "--header", "sample/api.hpp", "--namespace", "sample",
                 "--", "-Iinclude",

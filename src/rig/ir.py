@@ -210,7 +210,7 @@ def validate(document):
             if kind == "record":
                 member = _object(member, member_location, ("name", "type"),
                                  ("bool_value", "description", "minimum",
-                                  "omit_empty", "nullable"))
+                                  "omit_empty", "nullable", "string_values"))
                 member_name = _name(member["name"], f"{member_location}.name")
                 if "bool_value" in member:
                     if type(member["bool_value"]) is not bool or member["type"] != {
@@ -224,6 +224,21 @@ def validate(document):
                         "kind": "builtin", "name": "int"
                     }:
                         raise ValueError(f"{member_location}.minimum: requires an int field")
+                if "string_values" in member:
+                    choices = _array(member["string_values"],
+                                     f"{member_location}.string_values")
+                    ref = member["type"]
+                    if member.get("omit_empty") and not member.get("nullable") and (
+                        isinstance(ref, dict) and ref.get("kind") == "optional"
+                    ):
+                        ref = ref.get("value")
+                    if ref != {"kind": "builtin", "name": "string"}:
+                        raise ValueError(f"{member_location}.string_values: requires a string field")
+                    if not 1 <= len(choices) <= 16 or any(
+                        not isinstance(choice, str) or not choice or len(choice.encode()) >= 64
+                        for choice in choices
+                    ) or len(set(choices)) != len(choices):
+                        raise ValueError(f"{member_location}.string_values: expected unique nonempty strings")
                 for option in ("omit_empty", "nullable"):
                     if option in member:
                         ref = member["type"]

@@ -89,6 +89,27 @@ class IRValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expected nonempty text"):
             validate(self.ir)
 
+    def test_string_choices_require_a_string_field(self):
+        field = self.ir["types"][0]["fields"][0]
+        field["string_values"] = ["live", "trashed"]
+        with self.assertRaisesRegex(ValueError, "requires a string field"):
+            validate(self.ir)
+        field["type"]["name"] = "string"
+        self.assertIs(validate(self.ir), self.ir)
+        for choices in ([], ["live", "live"], [""], [7], ["x" * 64]):
+            with self.subTest(choices=choices), self.assertRaisesRegex(
+                ValueError, "expected unique nonempty strings"
+            ):
+                field["string_values"] = choices
+                validate(self.ir)
+        field["string_values"] = ["live", "trashed"]
+        field["type"] = {"kind": "optional", "value": {
+            "kind": "builtin", "name": "string"}}
+        with self.assertRaisesRegex(ValueError, "requires a string field"):
+            validate(self.ir)
+        field["omit_empty"] = True
+        self.assertIs(validate(self.ir), self.ir)
+
     def test_error_description_must_be_nonempty(self):
         self.ir["operations"][0]["errors"][0]["description"] = ""
         with self.assertRaisesRegex(ValueError, "expected nonempty text"):
