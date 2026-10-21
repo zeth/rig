@@ -215,7 +215,7 @@ def validate(document):
             if kind == "record":
                 member = _object(member, member_location, ("name", "type"),
                                  ("bool_value", "description", "minimum",
-                                  "omit_empty", "nullable", "string_values"))
+                                  "omit_empty", "nullable", "string_values", "write_only"))
                 member_name = _name(member["name"], f"{member_location}.name")
                 if "bool_value" in member:
                     if type(member["bool_value"]) is not bool or member["type"] != {
@@ -225,7 +225,13 @@ def validate(document):
                 if "description" in member and not isinstance(member["description"], str):
                     raise ValueError(f"{member_location}.description: expected string")
                 if "minimum" in member:
-                    if type(member["minimum"]) is not int or member["type"] != {
+                    ref = member["type"]
+                    # An omittable optional carries the bound on its value schema.
+                    if member.get("omit_empty") and not member.get("nullable") and (
+                        isinstance(ref, dict) and ref.get("kind") == "optional"
+                    ):
+                        ref = ref.get("value")
+                    if type(member["minimum"]) is not int or ref != {
                         "kind": "builtin", "name": "int"
                     }:
                         raise ValueError(f"{member_location}.minimum: requires an int field")
@@ -244,6 +250,8 @@ def validate(document):
                         for choice in choices
                     ) or len(set(choices)) != len(choices):
                         raise ValueError(f"{member_location}.string_values: expected unique nonempty strings")
+                if "write_only" in member and member["write_only"] is not True:
+                    raise ValueError(f"{member_location}.write_only: expected true")
                 for option in ("omit_empty", "nullable"):
                     if option in member:
                         ref = member["type"]

@@ -400,6 +400,7 @@ class InspectorTests(unittest.TestCase):
                 '  nlohmann::json context;\n'
                 '  std::optional<nlohmann::json> trace RIG_NULLABLE;\n'
                 '  std::map<std::string, std::vector<std::string>> metadata;\n'
+                '  std::map<std::string, std::string> secrets RIG_WRITE_ONLY;\n'
                 '};\n'
                 'RIG_ROUTE(POST, "/items") RIG_SUCCESS_STATUS(201) Item create_item(Item item);\n'
                 '}\n'
@@ -413,6 +414,7 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(fields[2]["type"], {"kind": "map", "values": {
                 "kind": "array", "items": {"kind": "builtin", "name": "string"}}})
             self.assertEqual(ir["operations"][0]["success_status"], 201)
+            self.assertIs(fields[3]["write_only"], True)
             for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
                                           ("http-routes", "--codec-header", "routes.hpp")):
                 generated = subprocess.run(
@@ -427,15 +429,15 @@ class InspectorTests(unittest.TestCase):
                 'sample::Item sample::create_item(Item item) { return item; }\n'
                 'int main() {\n'
                 '  auto created = rig_http::dispatch("POST", "/items",\n'
-                '      R"({"context":{"a":[1]},"trace":null,"metadata":{"k":["v"]}})");\n'
+                '      R"({"context":{"a":[1]},"trace":null,"metadata":{"k":["v"]},"secrets":{}})");\n'
                 '  if (!created || created->status != 201) return 1;\n'
                 '  if (created->body["context"]["a"][0] != 1 || !created->body["trace"].is_null() ||\n'
                 '      created->body["metadata"]["k"][0] != "v") return 2;\n'
                 '  auto not_object = rig_http::dispatch("POST", "/items",\n'
-                '      R"({"context":[1],"trace":null,"metadata":{}})");\n'
+                '      R"({"context":[1],"trace":null,"metadata":{},"secrets":{}})");\n'
                 '  if (!not_object || not_object->status != 400) return 3;\n'
                 '  auto bad_map = rig_http::dispatch("POST", "/items",\n'
-                '      R"({"context":{},"trace":null,"metadata":{"k":"v"}})");\n'
+                '      R"({"context":{},"trace":null,"metadata":{"k":"v"},"secrets":{}})");\n'
                 '  if (!bad_map || bad_map->status != 400) return 4;\n'
                 '}\n'
             )

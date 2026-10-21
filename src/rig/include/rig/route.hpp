@@ -41,6 +41,7 @@ struct minimum { int value; };
 struct field_description { char text[256]; };
 struct omit_empty {};
 struct nullable {};
+struct write_only {};
 struct summary { char text[256]; };
 struct description { char text[2048]; };
 struct response_description { char text[256]; };
@@ -87,6 +88,7 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_FIELD_DESCRIPTION(text) [[=::rig::field_description{text}]]
 #define RIG_OMIT_EMPTY [[=::rig::omit_empty{}]]
 #define RIG_NULLABLE [[=::rig::nullable{}]]
+#define RIG_WRITE_ONLY [[=::rig::write_only{}]]
 #define RIG_SUMMARY(text) [[=::rig::summary{text}]]
 #define RIG_DESCRIPTION(text) [[=::rig::description{text}]]
 #define RIG_RESPONSE_DESCRIPTION(text) [[=::rig::response_description{text}]]
@@ -119,6 +121,7 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_FIELD_DESCRIPTION(text)
 #define RIG_OMIT_EMPTY
 #define RIG_NULLABLE
+#define RIG_WRITE_ONLY
 #define RIG_SUMMARY(text)
 #define RIG_DESCRIPTION(text)
 #define RIG_RESPONSE_DESCRIPTION(text)

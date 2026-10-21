@@ -126,6 +126,11 @@ operations have a JSON response with HTTP 200, or with the status from
 `RIG_SUCCESS_STATUS(status)`, emitted as `success_status`: a 2xx status other
 than 204 or 205, since every success response has a body.
 
+`RIG_WRITE_ONLY` on a field emits `"write_only": true`, and OpenAPI marks the
+property `writeOnly`: clients send it, and responses never contain it. A record
+schema lists `required` only when some field is required. `RIG_MINIMUM(value)`
+applies to an `int` field or an omittable `std::optional<int>` field.
+
 The `object` builtin is a free-form JSON object: OpenAPI emits `type: object`
 with `additionalProperties: true`, and the codec accepts any object. The
 inspector recognises `nlohmann::json` by shape, without including nlohmann; a

@@ -195,6 +195,18 @@ class IRValidationTests(unittest.TestCase):
                          returns={"kind": "named", "name": "sample::Item"})
         self.assertIs(validate(self.ir), self.ir)
 
+    def test_minimum_applies_to_int_or_omittable_optional_int(self):
+        field = self.ir["types"][0]["fields"][0]
+        field["minimum"] = 0
+        self.assertIs(validate(self.ir), self.ir)
+        field["type"] = {"kind": "optional", "value": {"kind": "builtin", "name": "int"}}
+        with self.assertRaisesRegex(ValueError, "requires an int field"):
+            validate(self.ir)
+        field["omit_empty"] = True
+        self.assertIs(validate(self.ir), self.ir)
+        self.assertEqual(convert(self.ir)["components"]["schemas"]["Item"]["properties"]["id"],
+                         {"type": "integer", "minimum": 0})
+
     def test_success_status_is_a_2xx_with_a_body(self):
         for status in (201, 202, 299):
             self.ir["operations"][0]["success_status"] = status

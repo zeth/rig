@@ -324,8 +324,9 @@ void emit_record(std::ostream& output) {
             std::meta::annotations_of_with_type(field, ^^rig::minimum));
         static_assert(minimums.size() <= 1, "RIG fields need at most one minimum");
         if constexpr (minimums.size() == 1) {
-            static_assert(std::meta::is_same_type(std::meta::type_of(field), ^^int),
-                          "RIG_MINIMUM requires an int field");
+            static_assert(std::meta::is_same_type(std::meta::type_of(field), ^^int) ||
+                          std::meta::is_same_type(std::meta::type_of(field), ^^std::optional<int>),
+                          "RIG_MINIMUM requires an int or std::optional<int> field");
             constexpr auto value = [:std::meta::constant_of(minimums[0]):];
             output << ",\"minimum\":" << value.value;
         }
@@ -341,6 +342,10 @@ void emit_record(std::ostream& output) {
             }
             output << ']';
         }
+        constexpr auto write_only = std::define_static_array(
+            std::meta::annotations_of_with_type(field, ^^rig::write_only));
+        static_assert(write_only.size() <= 1, "RIG fields need at most one write-only annotation");
+        if constexpr (write_only.size() == 1) output << ",\"write_only\":true";
         constexpr auto omit_empty = std::define_static_array(
             std::meta::annotations_of_with_type(field, ^^rig::omit_empty));
         constexpr auto nullable = std::define_static_array(

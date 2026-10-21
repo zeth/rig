@@ -231,6 +231,18 @@ class ConversionTests(unittest.TestCase):
         routes = generate_routes(self.ir, "codec.hpp")
         self.assertIn("return response{201, rig_json::encode(sample::get_result(", routes)
 
+    def test_write_only_fields_and_records_without_required_fields(self):
+        self.ir["types"][0]["fields"] = [{
+            "name": "secret", "write_only": True,
+            "type": {"kind": "optional", "value": {"kind": "builtin", "name": "string"}},
+            "omit_empty": True,
+        }]
+        schema = convert(self.ir)["components"]["schemas"]["Result"]
+        self.assertEqual(schema, {
+            "type": "object", "additionalProperties": False,
+            "properties": {"secret": {"type": "string", "writeOnly": True}},
+        })
+
     def test_recursive_inline_record_is_rejected(self):
         self.ir["types"][0]["inline"] = True
         self.ir["types"][0]["fields"].append({

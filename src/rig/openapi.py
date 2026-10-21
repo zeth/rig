@@ -86,14 +86,15 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             for key in ("description", "minimum"):
                 if key in field:
                     property_schema[key] = field[key]
+            if field.get("write_only"):
+                property_schema["writeOnly"] = True
             properties[field["name"]] = property_schema
             if not field.get("omit_empty"):
                 required.append(field["name"])
-        result = {
-            "type": "object",
-            "properties": properties,
-            "required": required,
-        }
+        result = {"type": "object", "properties": properties}
+        # An empty list means the same as none; OpenAPI documents usually omit it.
+        if required:
+            result["required"] = required
         if not entry.get("open", False):
             result["additionalProperties"] = False
         return result
