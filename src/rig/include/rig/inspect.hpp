@@ -140,6 +140,12 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
                     std::meta::constant_of(annotation));
                 collect_type(response.body, types);
             }
+            for (auto annotation : std::meta::annotations_of_with_type(
+                     member, ^^rig::method_not_allowed)) {
+                const auto response = std::meta::extract<rig::method_not_allowed>(
+                    std::meta::constant_of(annotation));
+                collect_type(response.body, types);
+            }
         }
         if (!has_route(member)) continue;
         collect_type(std::meta::return_type_of(member), types);
@@ -561,6 +567,13 @@ void emit_service(std::ostream& output) {
                   "RIG service declarations need at most one internal error");
     if constexpr (internal.size() == 1) {
         emit_service_response<internal[0]>(output, "internal_error");
+    }
+    constexpr auto method_not_allowed = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::method_not_allowed));
+    static_assert(method_not_allowed.size() <= 1,
+                  "RIG service declarations need at most one method-not-allowed response");
+    if constexpr (method_not_allowed.size() == 1) {
+        emit_service_response<method_not_allowed[0]>(output, "method_not_allowed");
     }
     output << '}';
 }

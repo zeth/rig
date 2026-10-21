@@ -249,7 +249,7 @@ discovery. Repeated `RIG_SERVER(url)` annotations list the advertised server
 URLs, and one `RIG_BEARER_AUTH(name, format)` declares a global HTTP bearer
 scheme. The inspector emits these as a `service` object with `title`,
 `version`, `servers`, and optional `bearer_auth`, `validation_error`,
-`unauthorized`, and `internal_error`. OpenAPI uses them for `info`,
+`unauthorized`, `internal_error`, and `method_not_allowed`. OpenAPI uses them for `info`,
 `servers`, `components.securitySchemes`, and global `security`. Without a
 service declaration, `rig openapi` continues to use its title and version
 arguments and emits no servers or security scheme. A namespace registration
@@ -275,6 +275,19 @@ an operation that already maps `std::exception` keeps its own mapping. OpenAPI
 documents the 500 on every operation, keeping a declared 500 with the same body
 and using `anyOf` for a different one. Exceptions not derived from
 `std::exception` still propagate to the hosting server.
+
+`RIG_METHOD_NOT_ALLOWED(Body, description)` on the service emits
+`service.method_not_allowed` and registers the body type. When no operation
+takes a request, generated dispatch then checks whether its path matches any
+declared operation, including host-response operations. If it does, dispatch
+returns 405 with `rig_error_body(std::type_identity<Body>{}, 405, error)`,
+where `error` is a `rig_http::method_not_allowed`, and sets the response's
+`allow` to the matching operations' methods in sorted order, separated by
+`", "`, for the host to send as the `Allow` header. A path that matches no
+operation still returns no response. OpenAPI does not document the 405: a
+request with an operation's own method never receives it. Without the
+annotation, dispatch returns no response for an unmatched method, as before.
+`allow` is empty on every other response.
 
 `RIG_HOST_RESPONSE(media_type)` marks an operation whose response the hosting
 server writes, with that media type. The declaration describes the contract

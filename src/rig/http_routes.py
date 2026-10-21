@@ -14,6 +14,7 @@ def generate(ir, codec_header):
                          for error in operation.get("errors", []))
     validation = ir.get("service", {}).get("validation_error")
     internal = ir.get("service", {}).get("internal_error")
+    not_allowed = ir.get("service", {}).get("method_not_allowed")
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", codec_header):
         raise ValueError("invalid codec header path")
 
@@ -51,6 +52,7 @@ def generate(ir, codec_header):
         "#include <limits>",
         "#include <map>",
         "#include <optional>",
+        *(["#include <set>"] if not_allowed else []),
         "#include <regex>",
         "#include <stdexcept>",
         "#include <string>",
@@ -62,7 +64,19 @@ def generate(ir, codec_header):
         "",
         "namespace rig_http {",
         "using json = nlohmann::json;",
-        "struct response { int status; json body; std::string_view operation; };",
+        "struct response {",
+        "    int status;",
+        "    json body;",
+        "    std::string_view operation;",
+        "    // The methods the path accepts, for a 405's Allow header; empty otherwise.",
+        "    std::string allow = {};",
+        "};",
+        *([
+            "// The error passed to rig_error_body for a 405.",
+            "struct method_not_allowed : std::runtime_error {",
+            "    using std::runtime_error::runtime_error;",
+            "};",
+        ] if not_allowed else []),
         *([
             "// The application supplies rig_error_body, found by argument-dependent",
             "// lookup, to build each declared error body from an exception.",
@@ -71,7 +85,7 @@ def generate(ir, codec_header):
             "    const Body body = rig_error_body(std::type_identity<Body>{}, status, error);",
             "    return rig_json::encode(body);",
             "}",
-        ] if has_exceptions or validation or internal else []),
+        ] if has_exceptions or validation or internal or not_allowed else []),
         "inline response invalid_request(const std::exception& error, std::string_view operation) {",
         *([f"    return {{400, encode_error<{cpp_type(validation['type'])}>(400, error), operation}};"]
           if validation else
@@ -387,6 +401,35 @@ def generate(ir, codec_header):
         else:
             lines += invoke
         lines.append("    }")
+    if not_allowed:
+        # No operation took the method, so the path either names none or names
+        # some with other methods. Host-served operations count, as they are
+        # declared too. Operations with the same path pattern share one check.
+        methods_by_pattern = {}
+        for _, operation in ordered:
+            parameters = {identifier(item["name"]): item for item in operation["parameters"]}
+            pattern, _ = route_pattern(operation["path"], parameters)
+            methods_by_pattern.setdefault(pattern, set()).add(operation["method"])
+        lines.append("    std::set<std::string_view> allowed;")
+        for position, (pattern, methods) in enumerate(methods_by_pattern.items()):
+            listed = ", ".join(json.dumps(method) for method in sorted(methods))
+            lines += [
+                f"    static const std::regex path_{position}({json.dumps(pattern)});",
+                f"    if (std::regex_match(route_path, path_{position})) "
+                f"allowed.insert({{{listed}}});",
+            ]
+        lines += [
+            "    if (!allowed.empty()) {",
+            "        std::string allow;",
+            "        for (const auto allowed_method : allowed) {",
+            '            if (!allow.empty()) allow += ", ";',
+            "            allow += allowed_method;",
+            "        }",
+            f'        const method_not_allowed error("method not allowed");',
+            f"        return response{{405, encode_error<{cpp_type(not_allowed['type'])}>(405, error), "
+            '"", std::move(allow)};',
+            "    }",
+        ]
     lines += [
         "    return std::nullopt;",
         "}",

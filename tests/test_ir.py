@@ -421,6 +421,11 @@ class IRValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expected nonempty URL"):
             validate(self.ir)
         self.ir["service"]["servers"] = ["/"]
+        self.ir["service"]["method_not_allowed"] = {"type": {"kind": "named", "name": "Missing"},
+                                                    "description": "Method not allowed"}
+        with self.assertRaisesRegex(ValueError, "method_not_allowed.type"):
+            validate(self.ir)
+        del self.ir["service"]["method_not_allowed"]
         self.ir["service"]["bearer_auth"]["name"] = "bad-name"
         with self.assertRaisesRegex(ValueError, "invalid C\\+\\+ identifier"):
             validate(self.ir)

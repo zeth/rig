@@ -78,6 +78,7 @@ struct bearer_auth { char name[64]; char format[64]; };
 struct validation_error { std::meta::info body; char description[256]; };
 struct unauthorized { std::meta::info body; char description[256]; };
 struct internal_error { std::meta::info body; char description[256]; };
+struct method_not_allowed { std::meta::info body; char description[256]; };
 struct public_operation {};
 struct host_response { char media_type[128]; };
 struct success_status { int status; };
@@ -143,6 +144,8 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_SUCCESS_STATUS(status) [[=::rig::success_status{status}]]
 #define RIG_INTERNAL_ERROR(body, description) \
     [[=::rig::internal_error{^^body, description}]]
+#define RIG_METHOD_NOT_ALLOWED(body, description) \
+    [[=::rig::method_not_allowed{^^body, description}]]
 #define RIG_ERROR_RESPONSE(status, body, description, ...) \
     [[=::rig::make_error_response<__VA_ARGS__>(status, ^^body, description)]]
 #else
@@ -185,5 +188,6 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_HOST_RESPONSE(media_type)
 #define RIG_SUCCESS_STATUS(status)
 #define RIG_INTERNAL_ERROR(body, description)
+#define RIG_METHOD_NOT_ALLOWED(body, description)
 #define RIG_ERROR_RESPONSE(status, body, description, ...)
 #endif

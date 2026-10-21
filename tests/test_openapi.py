@@ -169,6 +169,29 @@ class ConversionTests(unittest.TestCase):
         self.assertIn('return response{500, encode_error<sample::Result>(500, error), '
                       '"get_result"};', routes)
 
+    def test_method_not_allowed_is_opt_in_and_not_documented(self):
+        result = {"kind": "named", "name": "sample::Result"}
+        self.assertNotIn("response{405", generate_routes(self.ir, "codec.hpp"))
+        self.ir["service"] = {"title": "Sample", "version": "1.0", "servers": [],
+                              "method_not_allowed": {"type": result,
+                                                     "description": "Method not allowed"}}
+        self.ir["operations"].append({
+            "name": "put_result", "cpp_name": "sample::put_result", "method": "PUT",
+            "path": "/results/{id}",
+            "parameters": [{"name": "id", "type": {"kind": "builtin", "name": "int"}}],
+            "returns": result, "result": False,
+        })
+        routes = generate_routes(self.ir, "codec.hpp")
+        # Both methods share the path's one check.
+        self.assertEqual(routes.count("allowed.insert("), 1)
+        self.assertIn('allowed.insert({"GET", "PUT"});', routes)
+        self.assertIn("return response{405, encode_error<sample::Result>(405, error), "
+                      '"", std::move(allow)};', routes)
+        # A request with an operation's own method never gets the 405.
+        document = convert(self.ir)
+        for method in ("get", "put"):
+            self.assertNotIn("405", document["paths"]["/results/{id}"][method]["responses"])
+
     def test_is_public_answers_false_without_public_operations(self):
         routes = generate_routes(self.ir, "codec.hpp")
         self.assertIn("inline bool is_public(const std::string& method, "

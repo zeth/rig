@@ -198,6 +198,9 @@ operation that needs no token: it gets `security: []` and no 401. The host
 asks `rig_http::is_public(method, path)` before authenticating.
 `RIG_INTERNAL_ERROR(ErrorResponse, "Internal server error")` makes every
 operation turn an otherwise unmapped `std::exception` into a documented 500.
+`RIG_METHOD_NOT_ALLOWED(ErrorResponse, "Method not allowed")` makes dispatch
+answer a declared path with an undeclared method with 405, setting
+`response.allow` for the `Allow` header, instead of leaving it to the host.
 
 A `nlohmann::json` field is a free-form JSON object, a
 `std::map<std::string, T>` field is an object of `T` values, and

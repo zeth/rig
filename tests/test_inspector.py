@@ -312,7 +312,8 @@ class InspectorTests(unittest.TestCase):
                 'struct Failure { bool ok RIG_BOOL_VALUE(false); std::string message; };\n'
                 'struct RIG_API("Sample", "1.0") RIG_BEARER_AUTH("bearerAuth", "token") '
                 'RIG_VALIDATION_ERROR(Failure, "Bad request") '
-                'RIG_INTERNAL_ERROR(Failure, "Internal server error") Service {};\n'
+                'RIG_INTERNAL_ERROR(Failure, "Internal server error") '
+                'RIG_METHOD_NOT_ALLOWED(Failure, "Method not allowed") Service {};\n'
                 'struct Item { std::string name; int count; };\n'
                 'RIG_ROUTE(PUT, "/items/{id}") Item put_item(int id, Item item);\n'
                 'RIG_ROUTE(GET, "/items/{name}") RIG_PUBLIC Item read_item(std::string name);\n'
@@ -334,6 +335,8 @@ class InspectorTests(unittest.TestCase):
             self.assertIn("sample::Failure", [entry["cpp_name"] for entry in ir["types"]])
             self.assertEqual(ir["service"]["internal_error"]["description"],
                              "Internal server error")
+            self.assertEqual(ir["service"]["method_not_allowed"]["description"],
+                             "Method not allowed")
             self.assertEqual([operation.get("public", False) for operation in ir["operations"]],
                              [False, True, False, True])
             self.assertEqual(ir["operations"][3]["host_response"], "text/plain")
@@ -375,6 +378,14 @@ class InspectorTests(unittest.TestCase):
                 '  if (rig_http::is_public("GET", "/elsewhere")) return 8;\n'
                 '  if (rig_http::dispatch("GET", "/items/a/raw", "")) return 9;\n'
                 '  if (!rig_http::is_public("GET", "/items/a/raw")) return 10;\n'
+                '  // /items/1 matches both /items/{id} and /items/{name}.\n'
+                '  auto wrong = rig_http::dispatch("DELETE", "/items/1?force=1", "");\n'
+                '  if (!wrong || wrong->status != 405 || wrong->allow != "GET, PUT" ||\n'
+                '      wrong->body["message"] != "405: method not allowed") return 11;\n'
+                '  auto host = rig_http::dispatch("POST", "/items/a/raw", "");\n'
+                '  if (!host || host->status != 405 || host->allow != "GET") return 12;\n'
+                '  if (rig_http::dispatch("GET", "/elsewhere", "")) return 13;\n'
+                '  if (!ok->allow.empty()) return 14;\n'
                 '}\n'
             )
             include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"

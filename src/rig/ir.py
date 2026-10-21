@@ -211,7 +211,7 @@ def validate(document):
     if "service" in ir:
         service = _object(ir["service"], "$.service", ("title", "version", "servers"),
                           ("bearer_auth", "validation_error", "unauthorized",
-                           "internal_error"))
+                           "internal_error", "method_not_allowed"))
         for key in ("title", "version"):
             if not isinstance(service[key], str) or not service[key]:
                 raise ValueError(f"$.service.{key}: expected nonempty text")
@@ -397,7 +397,7 @@ def validate(document):
             return records[ref["name"]]["fields"][0]["type"]
         return ref
 
-    for key in ("validation_error", "unauthorized", "internal_error"):
+    for key in ("validation_error", "unauthorized", "internal_error", "method_not_allowed"):
         if key in ir.get("service", {}):
             response = _object(ir["service"][key], f"$.service.{key}", ("type", "description"))
             type_ref(response["type"], f"$.service.{key}.type")
