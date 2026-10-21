@@ -91,6 +91,37 @@ class ConversionTests(unittest.TestCase):
             "type": "object", "required": ["name"], "properties": {"name": {"type": "string"}},
         })
 
+    def test_configured_validation_error_documents_each_decoded_operation(self):
+        error_ref = {"kind": "named", "name": "sample::Result"}
+        self.ir["service"] = {"title": "Sample", "version": "1.0", "servers": [],
+                              "validation_error": {"type": error_ref, "description": "Bad request"}}
+        self.ir["operations"].append({
+            "name": "set_result", "cpp_name": "sample::set_result", "method": "PUT",
+            "path": "/results/{id}/state",
+            "parameters": [{"name": "id", "type": {"kind": "builtin", "name": "int"}}],
+            "returns": error_ref, "result": False,
+            "errors": [{"status": 400, "type": error_ref, "description": "Rejected"}],
+        })
+        self.ir["operations"].append({
+            "name": "list_results", "cpp_name": "sample::list_results", "method": "GET",
+            "path": "/results", "parameters": [], "returns": error_ref, "result": False,
+        })
+        document = convert(self.ir)
+        self.assertNotIn("RigInvalidRequest", document["components"]["schemas"])
+        self.assertEqual(document["paths"]["/results/{id}"]["get"]["responses"]["400"], {
+            "description": "Bad request",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Result"}}},
+        })
+        # A declared 400 with the same body is already the validation response.
+        self.assertEqual(
+            document["paths"]["/results/{id}/state"]["put"]["responses"]["400"]["description"],
+            "Rejected",
+        )
+        self.assertNotIn("400", document["paths"]["/results"]["get"]["responses"])
+        routes = generate_routes(self.ir, "codec.hpp")
+        self.assertIn("return {400, encode_error<sample::Result>(400, error), operation};", routes)
+        self.assertNotIn('"invalid_request"', routes)
+
     def test_recursive_inline_record_is_rejected(self):
         self.ir["types"][0]["inline"] = True
         self.ir["types"][0]["fields"].append({
@@ -100,13 +131,14 @@ class ConversionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "recursive inline record"):
             convert(self.ir)
 
-    def test_external_context_is_not_an_http_parameter_or_generated_400(self):
+    def test_external_context_is_not_an_http_parameter(self):
         self.ir["operations"][0]["context_parameters"] = [
             {"name": "database", "position": 0}]
         document = convert(self.ir)
         operation = document["paths"]["/results/{id}"]["get"]
         self.assertEqual([item["name"] for item in operation["parameters"]], ["id"])
-        self.assertNotIn("400", operation["responses"])
+        # The id is still decoded, so its documented 400 remains.
+        self.assertIn("400", operation["responses"])
         routes = generate_routes(self.ir, "codec.hpp")
         self.assertIn("template <typename Context>", routes)
         self.assertIn("sample::get_result(context.database, std::move(*argument_0))", routes)

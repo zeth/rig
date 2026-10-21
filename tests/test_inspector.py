@@ -300,6 +300,66 @@ class InspectorTests(unittest.TestCase):
                 None, ["sample::Missing", "std::out_of_range"], ["std::exception"],
             ])
 
+    def test_validation_error_body_is_built_by_the_application(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <exception>\n#include <string>\n#include <type_traits>\n'
+                'namespace sample {\n'
+                'struct Failure { bool ok RIG_BOOL_VALUE(false); std::string message; };\n'
+                'struct RIG_API("Sample", "1.0") '
+                'RIG_VALIDATION_ERROR(Failure, "Bad request") Service {};\n'
+                'struct Item { std::string name; int count; };\n'
+                'RIG_ROUTE(PUT, "/items/{id}") Item put_item(int id, Item item);\n'
+                'Failure rig_error_body(std::type_identity<Failure>, int status, '
+                'const std::exception& error);\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            ir = json.loads(result.stdout)
+            self.assertEqual(ir["service"]["validation_error"], {
+                "type": {"kind": "named", "name": "sample::Failure"},
+                "description": "Bad request",
+            })
+            self.assertIn("sample::Failure", [entry["cpp_name"] for entry in ir["types"]])
+            for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
+                                          ("http-routes", "--codec-header", "routes.hpp")):
+                generated = subprocess.run(
+                    [sys.executable, "-m", "rig", command, flag,
+                     "api.hpp" if command == "json-codec" else "codec.hpp"],
+                    input=result.stdout, cwd=directory, text=True, capture_output=True,
+                )
+                self.assertEqual(generated.returncode, 0, generated.stderr)
+                (root / output).write_text(generated.stdout)
+            (root / "check.cpp").write_text(
+                '#include "routes.hpp"\n'
+                'sample::Item sample::put_item(int, Item item) { return item; }\n'
+                'sample::Failure sample::rig_error_body(std::type_identity<Failure>, int status, '
+                'const std::exception& error) {\n'
+                '  return {false, std::to_string(status) + ": " + error.what()};\n'
+                '}\n'
+                'int main() {\n'
+                '  auto ok = rig_http::dispatch("PUT", "/items/1", R"({"name":"a","count":1})");\n'
+                '  if (!ok || ok->status != 200) return 1;\n'
+                '  auto missing = rig_http::dispatch("PUT", "/items/1", R"({"name":"a"})");\n'
+                '  if (!missing || missing->status != 400 || missing->body["ok"] != false ||\n'
+                '      missing->body["message"] != "400: missing count") return 2;\n'
+                '  auto path = rig_http::dispatch("PUT", "/items/99999999999", "{}");\n'
+                '  if (!path || path->status != 400 || path->body.contains("code")) return 3;\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = root / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", f"-I{include_dir}", "-I.", "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_error_responses_reject_shadowed_exception_types(self):
         cases = (
             'RIG_ERROR_RESPONSE(500, Error, "Failed", std::exception)\n'

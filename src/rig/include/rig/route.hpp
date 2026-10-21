@@ -50,6 +50,7 @@ struct inline_record {};
 struct api { char title[128]; char version[32]; };
 struct server { char url[256]; };
 struct bearer_auth { char name[64]; char format[64]; };
+struct validation_error { std::meta::info body; char description[256]; };
 struct error_response {
     int status;
     std::meta::info body;
@@ -90,6 +91,8 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_API(title, version) [[=::rig::api{title, version}]]
 #define RIG_SERVER(url) [[=::rig::server{url}]]
 #define RIG_BEARER_AUTH(name, format) [[=::rig::bearer_auth{name, format}]]
+#define RIG_VALIDATION_ERROR(body, description) \
+    [[=::rig::validation_error{^^body, description}]]
 #define RIG_ERROR_RESPONSE(status, body, description, ...) \
     [[=::rig::make_error_response<__VA_ARGS__>(status, ^^body, description)]]
 #else
@@ -113,5 +116,6 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_API(title, version)
 #define RIG_SERVER(url)
 #define RIG_BEARER_AUTH(name, format)
+#define RIG_VALIDATION_ERROR(body, description)
 #define RIG_ERROR_RESPONSE(status, body, description, ...)
 #endif

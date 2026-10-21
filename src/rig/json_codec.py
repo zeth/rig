@@ -176,11 +176,13 @@ def generate(ir, api_header):
                 lines.append(f'    if (value == "{value}") return {qualified}::{value};')
             lines.append(f'    throw std::invalid_argument("unknown {name}");')
         else:
-            lines.append('    if (!value.is_object()')
+            lines.append(f'    if (!value.is_object()) throw std::invalid_argument("expected {name}");')
             for field in fields:
                 if not field.get("omit_empty"):
-                    lines.append(f'        || !value.contains("{field["name"]}")')
-            lines.append(f') throw std::invalid_argument("expected {name}");')
+                    lines.append(
+                        f'    if (!value.contains("{field["name"]}")) '
+                        f'throw std::invalid_argument("missing {field["name"]}");'
+                    )
             if not entry.get("open", False):
                 allowed = " && ".join(
                     f'it.key() != "{field["name"]}"' for field in fields

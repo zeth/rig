@@ -129,7 +129,7 @@ def route_priority(operation):
 
 def request_needs_decoding(operation):
     """Whether route input can fail conversion before calling the operation."""
-    return bool(operation["parameters"]) and not operation.get("context_parameters")
+    return bool(operation["parameters"])
 
 
 def query_value_type(ref):
@@ -172,7 +172,7 @@ def validate(document):
     operations = _array(ir["operations"], "$.operations")
     if "service" in ir:
         service = _object(ir["service"], "$.service", ("title", "version", "servers"),
-                          ("bearer_auth",))
+                          ("bearer_auth", "validation_error"))
         for key in ("title", "version"):
             if not isinstance(service[key], str) or not service[key]:
                 raise ValueError(f"$.service.{key}: expected nonempty text")
@@ -286,6 +286,12 @@ def validate(document):
         if entry["kind"] == "record":
             for member_index, field in enumerate(entry["fields"]):
                 type_ref(field["type"], f"$.types[{index}].fields[{member_index}].type")
+    if "validation_error" in ir.get("service", {}):
+        validation = _object(ir["service"]["validation_error"], "$.service.validation_error",
+                             ("type", "description"))
+        type_ref(validation["type"], "$.service.validation_error.type")
+        if not isinstance(validation["description"], str) or not validation["description"]:
+            raise ValueError("$.service.validation_error.description: expected nonempty text")
 
     operation_names = set()
     routes = {}

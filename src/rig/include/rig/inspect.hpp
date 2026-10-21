@@ -84,6 +84,14 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
     std::vector<std::meta::info> types;
     for (auto member : std::meta::members_of(
              scope, std::meta::access_context::unprivileged())) {
+        if (has_service(member)) {
+            for (auto annotation : std::meta::annotations_of_with_type(
+                     member, ^^rig::validation_error)) {
+                const auto validation = std::meta::extract<rig::validation_error>(
+                    std::meta::constant_of(annotation));
+                collect_type(validation.body, types);
+            }
+        }
         if (!has_route(member)) continue;
         collect_type(std::meta::return_type_of(member), types);
         for (auto parameter : std::meta::parameters_of(member)) {
@@ -325,6 +333,22 @@ void emit_enum(std::ostream& output) {
     output << "]}";
 }
 
+template <std::meta::info Annotation>
+consteval std::meta::info validation_body() {
+    constexpr auto validation = [:std::meta::constant_of(Annotation):];
+    return validation.body;
+}
+
+template <std::meta::info Annotation>
+consteval std::array<char, 256> validation_description() {
+    constexpr auto validation = [:std::meta::constant_of(Annotation):];
+    std::array<char, 256> text{};
+    for (std::size_t index = 0; index < text.size(); ++index) {
+        text[index] = validation.description[index];
+    }
+    return text;
+}
+
 template <std::meta::info Type>
 void emit_service(std::ostream& output) {
     constexpr auto apis = std::define_static_array(
@@ -354,6 +378,17 @@ void emit_service(std::ostream& output) {
         quoted(output, value.name);
         output << ",\"format\":";
         quoted(output, value.format);
+        output << '}';
+    }
+    constexpr auto validation = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::validation_error));
+    static_assert(validation.size() <= 1,
+                  "RIG service declarations need at most one validation error");
+    if constexpr (validation.size() == 1) {
+        output << ",\"validation_error\":{\"type\":";
+        emit_type<validation_body<validation[0]>()>(output);
+        output << ",\"description\":";
+        quoted(output, validation_description<validation[0]>().data());
         output << '}';
     }
     output << '}';

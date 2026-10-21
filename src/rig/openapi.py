@@ -106,8 +106,9 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         else:
             raise ValueError(f"unsupported declaration kind: {entry['kind']}")
 
+    validation = service.get("validation_error") if service else None
     invalid_request_name = "RigInvalidRequest"
-    if any(request_needs_decoding(operation) for operation in ir["operations"]):
+    if not validation and any(request_needs_decoding(operation) for operation in ir["operations"]):
         suffix = 2
         while invalid_request_name in components:
             invalid_request_name = f"RigInvalidRequest{suffix}"
@@ -175,16 +176,23 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 "content": {"application/json": {"schema": schema(error["type"])}}
             }
         if request_needs_decoding(operation):
-            invalid_schema = {"$ref": f"#/components/schemas/{invalid_request_name}"}
+            if validation:
+                invalid_schema = schema(validation["type"])
+                description = validation["description"]
+            else:
+                invalid_schema = {"$ref": f"#/components/schemas/{invalid_request_name}"}
+                description = "Invalid request"
             existing = result["responses"].get("400")
-            if existing:
+            if existing and existing["content"]["application/json"]["schema"] == invalid_schema:
+                pass
+            elif existing:
                 error_schema = existing["content"]["application/json"]["schema"]
                 existing["content"]["application/json"]["schema"] = {
                     "anyOf": [error_schema, invalid_schema],
                 }
             else:
                 result["responses"]["400"] = {
-                    "description": "Invalid request",
+                    "description": description,
                     "content": {"application/json": {"schema": invalid_schema}},
                 }
         if parameters:

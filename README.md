@@ -186,6 +186,10 @@ value, percent-encoded string path value, or JSON body cannot be decoded. It
 matches the path without its query string and decodes string path parameters
 after matching, including encoded slashes within a parameter. It calls the
 application operation only after decoding succeeds.
+By default that 400 body is `{"code": "invalid_request", "message": ...}`.
+`RIG_VALIDATION_ERROR(ErrorResponse, "Bad request")` on the service record
+makes dispatch build it with the same `rig_error_body` function used for mapped
+exceptions, and OpenAPI documents that body instead.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
 selected functions with `RIG_ROUTE`, and name its namespace at generation

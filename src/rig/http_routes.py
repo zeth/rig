@@ -11,6 +11,7 @@ def generate(ir, codec_header):
     has_context = any(operation.get("context_parameters") for operation in ir["operations"])
     has_exceptions = any(error.get("exceptions") for operation in ir["operations"]
                          for error in operation.get("errors", []))
+    validation = ir.get("service", {}).get("validation_error")
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", codec_header):
         raise ValueError("invalid codec header path")
 
@@ -36,6 +37,7 @@ def generate(ir, codec_header):
         "#pragma once",
         f'#include "{codec_header}"',
         "#include <charconv>",
+        "#include <exception>",
         "#include <initializer_list>",
         "#include <map>",
         "#include <optional>",
@@ -51,8 +53,19 @@ def generate(ir, codec_header):
         "namespace rig_http {",
         "using json = nlohmann::json;",
         "struct response { int status; json body; std::string_view operation; };",
-        "inline response invalid_request(const std::string& message, std::string_view operation) {",
-        '    return {400, json{{"code", "invalid_request"}, {"message", message}}, operation};',
+        *([
+            "// The application supplies rig_error_body, found by argument-dependent",
+            "// lookup, to build each declared error body from an exception.",
+            "template <typename Body, typename Error>",
+            "json encode_error(int status, const Error& error) {",
+            "    const Body body = rig_error_body(std::type_identity<Body>{}, status, error);",
+            "    return rig_json::encode(body);",
+            "}",
+        ] if has_exceptions or validation else []),
+        "inline response invalid_request(const std::exception& error, std::string_view operation) {",
+        *([f"    return {{400, encode_error<{cpp_type(validation['type'])}>(400, error), operation}};"]
+          if validation else
+          ['    return {400, json{{"code", "invalid_request"}, {"message", error.what()}}, operation};']),
         "}",
         "inline void enforce_range(int value, int minimum, int maximum, const char* name) {",
         "    if (value < minimum || value > maximum)",
@@ -143,15 +156,6 @@ def generate(ir, codec_header):
         "        throw std::invalid_argument(error.what());",
         "    }",
         "}",
-        *([
-            "// The application supplies rig_error_body, found by argument-dependent",
-            "// lookup, to build each declared error body from a mapped exception.",
-            "template <typename Body, typename Error>",
-            "json encode_error(int status, const Error& error) {",
-            "    const Body body = rig_error_body(std::type_identity<Body>{}, status, error);",
-            "    return rig_json::encode(body);",
-            "}",
-        ] if has_exceptions else []),
         *(["template <typename Context>"] if has_context else []),
         "inline std::optional<response> dispatch(const std::string& method,",
         "                                    const std::string& path,",
@@ -238,9 +242,9 @@ def generate(ir, codec_header):
                 "        try {",
                 *decodes,
                 "        } catch (const std::invalid_argument& error) {",
-                f'            return invalid_request(error.what(), "{name}");',
+                f'            return invalid_request(error, "{name}");',
                 "        } catch (const std::out_of_range& error) {",
-                f'            return invalid_request(error.what(), "{name}");',
+                f'            return invalid_request(error, "{name}");',
                 "        }",
             ]
         contexts = {item["position"]: f'context.{identifier(item["name"])}'

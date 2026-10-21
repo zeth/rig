@@ -172,7 +172,7 @@ default.
 discovery. Repeated `RIG_SERVER(url)` annotations list the advertised server
 URLs, and one `RIG_BEARER_AUTH(name, format)` declares a global HTTP bearer
 scheme. The inspector emits these as a `service` object with `title`,
-`version`, `servers`, and optional `bearer_auth`. OpenAPI uses them for `info`,
+`version`, `servers`, and optional `bearer_auth` and `validation_error`. OpenAPI uses them for `info`,
 `servers`, `components.securitySchemes`, and global `security`. Without a
 service declaration, `rig openapi` continues to use its title and version
 arguments and emits no servers or security scheme. A namespace registration
@@ -196,3 +196,16 @@ also declares an HTTP 400 response for invalid input. Its body has
 declares its own 400 error, OpenAPI uses `anyOf` for both bodies. The generated
 HTTP dispatcher returns this input error before invoking the application
 function; exceptions thrown by the function remain application failures.
+Server-supplied context parameters do not affect this rule: an operation with
+any path, query, or body parameter can return the 400.
+
+`RIG_VALIDATION_ERROR(Body, description)` on the service record replaces that
+body. The inspector emits `service.validation_error` with the body's `type`
+and nonempty `description`, and registers the body type. Generated dispatch
+then builds the 400 body with
+`rig_error_body(std::type_identity<Body>{}, 400, exception)`, passing the
+decoding exception, and OpenAPI omits `RigInvalidRequest`. An operation without
+a 400 gets one with the configured description and body; one that already
+declares a 400 with the same body keeps it, and a different body uses `anyOf`.
+A missing required record field fails decoding with the message `missing`
+followed by the field name.

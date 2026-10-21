@@ -129,6 +129,26 @@ class IRValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expected nonempty text"):
             validate(self.ir)
 
+    def test_validation_error_is_a_registered_body_with_description(self):
+        self.ir["service"] = {"title": "Sample", "version": "1.0", "servers": [],
+                              "validation_error": {
+                                  "type": {"kind": "named", "name": "sample::Error"},
+                                  "description": "Bad request"}}
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            ({"type": {"kind": "named", "name": "sample::Missing"}, "description": "Bad"},
+             "unregistered type"),
+            ({"type": {"kind": "named", "name": "sample::Error"}, "description": ""},
+             "expected nonempty text"),
+            ({"type": {"kind": "named", "name": "sample::Error"}}, "missing description"),
+        )
+        for validation, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                document["service"]["validation_error"] = validation
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+
     def test_mapped_exceptions_are_unique_qualified_names(self):
         operation = self.ir["operations"][0]
         operation["errors"][0]["exceptions"] = ["sample::NotFound", "std::out_of_range"]
@@ -192,7 +212,7 @@ class IRValidationTests(unittest.TestCase):
 
     def test_generated_responses_identify_the_matched_operation(self):
         routes = http_routes(self.ir, "codec.hpp")
-        self.assertIn('invalid_request(error.what(), "get_item")', routes)
+        self.assertIn('invalid_request(error, "get_item")', routes)
         self.assertIn('rig_json::encode(value), "get_item"', routes)
         self.assertIn('rig_json::encode(value.body), "get_item"', routes)
         self.ir["operations"][0]["result"] = False
