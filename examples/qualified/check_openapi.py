@@ -4,17 +4,21 @@ from pathlib import Path
 ir = json.loads(Path("build/rig.json").read_text())
 assert ir["ir_version"] == 12
 assert {entry["cpp_name"] for entry in ir["types"]} == {
-    "left::Result", "right::Result", "service::Pair"
+    "left::Result", "right::Result", "service::Pair", "service::Failure"
 }
 assert {entry["cpp_name"] for entry in ir["operations"]} == {
     "left::read", "left::by_key", "left::newest", "left::limited", "left::query",
     "left::filter", "left::choices",
     "right::read",
-    "service::echo", "service::check"
+    "service::echo", "service::check", "service::lookup"
 }
+lookup = next(entry for entry in ir["operations"] if entry["name"] == "lookup")
+assert [error.get("exceptions") for error in lookup["errors"]] == [
+    ["service::Gone"], ["service::Missing", "std::out_of_range"], ["std::exception"]
+]
 document = json.loads(Path("build/openapi.json").read_text())
 schemas = document["components"]["schemas"]
-assert set(schemas) == {"left.Result", "right.Result", "Pair", "RigInvalidRequest"}
+assert set(schemas) == {"left.Result", "right.Result", "Pair", "Failure", "RigInvalidRequest"}
 assert schemas["Pair"]["properties"] == {
     "left": {"$ref": "#/components/schemas/left.Result"},
     "right": {"$ref": "#/components/schemas/right.Result"},
@@ -51,4 +55,9 @@ assert checked["422"]["content"]["application/json"]["schema"] == {
 }
 assert checked["503"]["content"]["application/json"]["schema"] == {
     "$ref": "#/components/schemas/right.Result"
+}
+lookup = document["paths"]["/lookup/{key}"]["get"]["responses"]
+assert sorted(lookup) == ["200", "400", "404", "410", "500"]
+assert lookup["404"]["content"]["application/json"]["schema"] == {
+    "$ref": "#/components/schemas/Failure"
 }

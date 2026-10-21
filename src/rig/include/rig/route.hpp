@@ -54,7 +54,21 @@ struct error_response {
     int status;
     std::meta::info body;
     char description[256];
+    std::meta::info exceptions[8];
+    int exception_count;
 };
+template <typename... Exceptions>
+consteval error_response make_error_response(int status, std::meta::info body,
+                                             std::string_view description) {
+    static_assert(sizeof...(Exceptions) <= 8,
+                  "RIG error responses map at most eight exception types");
+    if (description.size() >= 256)
+        throw "RIG error response descriptions must be shorter than 256 characters";
+    error_response result{status, body, {}, {^^Exceptions...}, sizeof...(Exceptions)};
+    for (std::size_t index = 0; index < description.size(); ++index)
+        result.description[index] = description[index];
+    return result;
+}
 }
 #define RIG_ROUTE(method, path) [[=::rig::route{#method, path}]]
 #define RIG_QUERY [[=::rig::query{}]]
@@ -76,8 +90,8 @@ struct error_response {
 #define RIG_API(title, version) [[=::rig::api{title, version}]]
 #define RIG_SERVER(url) [[=::rig::server{url}]]
 #define RIG_BEARER_AUTH(name, format) [[=::rig::bearer_auth{name, format}]]
-#define RIG_ERROR_RESPONSE(status, body, description) \
-    [[=::rig::error_response{status, ^^body, description}]]
+#define RIG_ERROR_RESPONSE(status, body, description, ...) \
+    [[=::rig::make_error_response<__VA_ARGS__>(status, ^^body, description)]]
 #else
 #define RIG_ROUTE(method, path)
 #define RIG_QUERY
@@ -99,5 +113,5 @@ struct error_response {
 #define RIG_API(title, version)
 #define RIG_SERVER(url)
 #define RIG_BEARER_AUTH(name, format)
-#define RIG_ERROR_RESPONSE(status, body, description)
+#define RIG_ERROR_RESPONSE(status, body, description, ...)
 #endif

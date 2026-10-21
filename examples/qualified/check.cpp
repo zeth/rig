@@ -29,6 +29,18 @@ service::check(Pair pair) {
     if (pair.right.value.empty()) return rig::error<503, right::Result>{pair.right};
     return pair;
 }
+left::Result service::lookup(std::string key) {
+    if (key == "gone") throw Gone("gone away");
+    if (key == "missing") throw Missing("no such key");
+    if (key == "range") throw std::out_of_range("outside the table");
+    if (key == "broken") throw std::logic_error("broken table");
+    if (key == "unmapped") throw 7;
+    return {static_cast<int>(key.size())};
+}
+service::Failure service::rig_error_body(std::type_identity<Failure>, int status,
+                                         const std::exception& error) {
+    return {status, error.what()};
+}
 
 int main() {
     const auto left = rig_http::dispatch("GET", "/left", "");
@@ -115,6 +127,24 @@ int main() {
     assert(right_error && right_error->status == 503 && right_error->body["value"] == "");
     assert(invalid_body && invalid_body->status == 400 &&
            invalid_body->body["code"] == "invalid_request");
+    const auto found = rig_http::dispatch("GET", "/lookup/key", "");
+    const auto gone = rig_http::dispatch("GET", "/lookup/gone", "");
+    const auto missing = rig_http::dispatch("GET", "/lookup/missing", "");
+    const auto range = rig_http::dispatch("GET", "/lookup/range", "");
+    const auto broken = rig_http::dispatch("GET", "/lookup/broken", "");
+    assert(found && found->status == 200 && found->body["value"] == 3);
+    assert(gone && gone->status == 410 && gone->body["status"] == 410 &&
+           gone->body["message"] == "gone away" && gone->operation == "lookup");
+    assert(missing && missing->status == 404 && missing->body["message"] == "no such key");
+    assert(range && range->status == 404 && range->body["message"] == "outside the table");
+    assert(broken && broken->status == 500 && broken->body["message"] == "broken table");
+    bool unmapped_failure = false;
+    try {
+        rig_http::dispatch("GET", "/lookup/unmapped", "");
+    } catch (int) {
+        unmapped_failure = true;
+    }
+    assert(unmapped_failure);
     bool application_failure = false;
     try {
         rig_http::dispatch("POST", "/checked",

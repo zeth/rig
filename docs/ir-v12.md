@@ -69,7 +69,15 @@ inspector writes it even when empty. A function returning `rig::result<Success,
 rig::error<Status, Body>...>` supplies both the success type and its declared
 error responses. The generated HTTP dispatcher returns the selected status
 and encoded body. Plain return types produce status 200; their `errors` array
-can document responses supplied by the hosting server. Methods are uppercase `GET`, `POST`,
+can document responses supplied by the hosting server. An annotated error
+can carry `exceptions`, a nonempty array of qualified C++ class names written
+by `RIG_ERROR_RESPONSE(status, Body, description, Exception...)`. Each name
+appears at most once per operation. Generated dispatch catches them in IR
+order and returns the error's status with
+`rig_error_body(std::type_identity<Body>{}, status, exception)`, a function
+the application supplies for argument-dependent lookup. The inspector rejects
+a mapped type listed after one of its bases. OpenAPI ignores `exceptions`.
+Methods are uppercase `GET`, `POST`,
 `PUT`, `PATCH`, or `DELETE`. Error status codes are unique integers from 400
 through 599. Each method and path pair and each operation `cpp_name` is unique.
 

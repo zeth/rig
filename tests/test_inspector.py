@@ -277,6 +277,56 @@ class InspectorTests(unittest.TestCase):
             run = subprocess.run([binary], cwd=directory, capture_output=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_error_responses_map_exception_types(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <stdexcept>\n'
+                'namespace sample {\n'
+                'struct Item { int value; };\n'
+                'struct Error { int code; };\n'
+                'struct Missing : std::runtime_error { using std::runtime_error::runtime_error; };\n'
+                'RIG_ROUTE(GET, "/item")\n'
+                'RIG_ERROR_RESPONSE(401, Error, "Unauthorized")\n'
+                'RIG_ERROR_RESPONSE(404, Error, "Not found", Missing, std::out_of_range)\n'
+                'RIG_ERROR_RESPONSE(500, Error, "Failed", std::exception)\n'
+                'Item get_item();\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            errors = json.loads(result.stdout)["operations"][0]["errors"]
+            self.assertEqual([error.get("exceptions") for error in errors], [
+                None, ["sample::Missing", "std::out_of_range"], ["std::exception"],
+            ])
+
+    def test_error_responses_reject_shadowed_exception_types(self):
+        cases = (
+            'RIG_ERROR_RESPONSE(500, Error, "Failed", std::exception)\n'
+            'RIG_ERROR_RESPONSE(404, Error, "Not found", Missing)\n',
+            'RIG_ERROR_RESPONSE(404, Error, "Not found", Missing)\n'
+            'RIG_ERROR_RESPONSE(410, Error, "Gone", Missing)\n',
+        )
+        for annotations in cases:
+            with self.subTest(annotations=annotations), \
+                    tempfile.TemporaryDirectory() as directory:
+                (Path(directory) / "api.hpp").write_text(
+                    '#include <rig/route.hpp>\n'
+                    '#include <stdexcept>\n'
+                    'namespace sample {\n'
+                    'struct Item { int value; };\n'
+                    'struct Error { int code; };\n'
+                    'struct Missing : std::runtime_error { using std::runtime_error::runtime_error; };\n'
+                    'RIG_ROUTE(GET, "/item")\n' + annotations +
+                    'Item get_item();\n'
+                    '}\n'
+                )
+                result = self.run_inspect(directory, "--header", "api.hpp",
+                                          "--namespace", "sample")
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("listed derived before base", result.stderr)
+
     def test_compilation_failure_has_no_ir_output(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "bad.cpp").write_text("int main( {\n")

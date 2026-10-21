@@ -159,6 +159,24 @@ short names collide. `examples/qualified` checks this across namespaces.
 Server-level HTTP errors can be documented with `RIG_ERROR_RESPONSE` even when
 the function returns a plain success value. The generated dispatcher then calls
 the function directly; the hosting server remains responsible for those errors.
+An error response can also name the exception types that produce it:
+
+```cpp
+RIG_ROUTE(GET, "/projects/{id}")
+RIG_ERROR_RESPONSE(404, ErrorResponse, "Not found", ProjectNotFound)
+RIG_ERROR_RESPONSE(500, ErrorResponse, "Internal error", std::exception)
+Project get_project(std::string id);
+
+ErrorResponse rig_error_body(std::type_identity<ErrorResponse>, int status,
+                             const std::exception& error);
+```
+
+Generated dispatch then catches each named type, in annotation order, and
+returns that status with the body built by `rig_error_body`. The application
+declares `rig_error_body` beside the body type so argument-dependent lookup
+finds it, and can overload it for particular exception types. A type listed
+after one of its bases would never be caught, so the inspector rejects it.
+Unmapped exceptions still propagate to the hosting server.
 The current codec generator targets public aggregate records. The route generator currently supports
 literal path segments and whole-segment `int` or string placeholders.
 IR validation rejects ambiguous overlapping routes, and generated dispatch

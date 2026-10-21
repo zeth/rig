@@ -403,9 +403,23 @@ def validate(document):
                for parameter in parameters):
             raise ValueError(f"{location}: body parameter descriptions are unsupported")
         statuses = set()
+        exceptions = set()
         for error_index, error in enumerate(_array(operation.get("errors", []), f"{location}.errors")):
             error_location = f"{location}.errors[{error_index}]"
-            error = _object(error, error_location, ("status", "type"), ("description",))
+            error = _object(error, error_location, ("status", "type"),
+                            ("description", "exceptions"))
+            if "exceptions" in error:
+                mapped = _array(error["exceptions"], f"{error_location}.exceptions")
+                if not mapped:
+                    raise ValueError(f"{error_location}.exceptions: expected exception types")
+                for exception_index, exception in enumerate(mapped):
+                    exception_location = f"{error_location}.exceptions[{exception_index}]"
+                    try:
+                        exception = cpp_name(exception)
+                    except ValueError as problem:
+                        raise ValueError(f"{exception_location}: {problem}") from None
+                    _unique(exceptions, exception, exception_location,
+                            f"mapped exception in {name}")
             status = error["status"]
             if type(status) is not int or not 400 <= status <= 599:
                 raise ValueError(f"{error_location}: invalid error status in {name}: {status!r}")

@@ -396,8 +396,36 @@ consteval std::array<char, 256> annotated_error_description() {
     return text;
 }
 
+template <std::meta::info Annotation>
+consteval std::vector<std::meta::info> annotated_error_exceptions() {
+    constexpr auto response = [:std::meta::constant_of(Annotation):];
+    return {response.exceptions, response.exceptions + response.exception_count};
+}
+
+// Generated dispatch catches mapped exceptions in annotation order, so an
+// earlier type must not also catch a later one.
+consteval bool exceptions_in_catch_order(std::meta::info function) {
+    std::vector<std::meta::info> seen;
+    for (auto annotation : std::meta::annotations_of_with_type(function, ^^rig::error_response)) {
+        const auto response = std::meta::extract<rig::error_response>(
+            std::meta::constant_of(annotation));
+        for (int index = 0; index < response.exception_count; ++index) {
+            const auto type = response.exceptions[index];
+            if (!std::meta::is_class_type(type)) return false;
+            for (auto earlier : seen) {
+                if (std::meta::is_same_type(earlier, type) ||
+                    std::meta::is_base_of_type(earlier, type)) return false;
+            }
+            seen.push_back(type);
+        }
+    }
+    return true;
+}
+
 template <std::meta::info Function>
 void emit_operation(std::ostream& output) {
+    static_assert(exceptions_in_catch_order(Function),
+                  "RIG mapped exceptions must be distinct classes, listed derived before base");
     constexpr auto annotations = std::define_static_array(
         std::meta::annotations_of_with_type(Function, ^^rig::route));
     static_assert(annotations.size() == 1, "RIG operations need exactly one route");
@@ -535,6 +563,17 @@ void emit_operation(std::ostream& output) {
         emit_type<body>(output);
         output << ",\"description\":";
         quoted(output, description.data());
+        if constexpr (!annotated_error_exceptions<annotation>().empty()) {
+            output << ",\"exceptions\":[";
+            bool first_exception = true;
+            template for (constexpr auto exception : std::define_static_array(
+                annotated_error_exceptions<annotation>())) {
+                if (!first_exception) output << ',';
+                first_exception = false;
+                quoted(output, qualified_name<exception>());
+            }
+            output << ']';
+        }
         output << '}';
     }
     output << ']';

@@ -9,6 +9,8 @@ from .ir import identifier, query_value_type, route_pattern, route_priority, val
 def generate(ir, codec_header):
     validate(ir)
     has_context = any(operation.get("context_parameters") for operation in ir["operations"])
+    has_exceptions = any(error.get("exceptions") for operation in ir["operations"]
+                         for error in operation.get("errors", []))
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", codec_header):
         raise ValueError("invalid codec header path")
 
@@ -141,6 +143,15 @@ def generate(ir, codec_header):
         "        throw std::invalid_argument(error.what());",
         "    }",
         "}",
+        *([
+            "// The application supplies rig_error_body, found by argument-dependent",
+            "// lookup, to build each declared error body from a mapped exception.",
+            "template <typename Body, typename Error>",
+            "json encode_error(int status, const Error& error) {",
+            "    const Body body = rig_error_body(std::type_identity<Body>{}, status, error);",
+            "    return rig_json::encode(body);",
+            "}",
+        ] if has_exceptions else []),
         *(["template <typename Context>"] if has_context else []),
         "inline std::optional<response> dispatch(const std::string& method,",
         "                                    const std::string& path,",
@@ -240,7 +251,7 @@ def generate(ir, codec_header):
         call = f"{operation['cpp_name']}({', '.join(call_arguments)})"
         if operation["result"]:
             success = cpp_type(operation["returns"])
-            lines += [
+            invoke = [
                 f"        const auto outcome = {call};",
                 f'        return std::visit([](const auto& value) -> response {{',
                 "            using value_type = std::decay_t<decltype(value)>;",
@@ -252,7 +263,20 @@ def generate(ir, codec_header):
                 "        }, outcome.value());",
             ]
         else:
-            lines.append(f'        return response{{200, rig_json::encode({call}), "{name}"}};')
+            invoke = [f'        return response{{200, rig_json::encode({call}), "{name}"}};']
+        mapped = [(error["status"], cpp_type(error["type"]), exception)
+                  for error in operation.get("errors", [])
+                  for exception in error.get("exceptions", [])]
+        if mapped:
+            lines += ["        try {", *("    " + line for line in invoke)]
+            for status, body_type, exception in mapped:
+                lines += [
+                    f"        }} catch (const {exception}& error) {{",
+                    f'            return response{{{status}, encode_error<{body_type}>({status}, error), "{name}"}};',
+                ]
+            lines.append("        }")
+        else:
+            lines += invoke
         lines.append("    }")
     lines += [
         "    return std::nullopt;",

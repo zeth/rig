@@ -129,6 +129,54 @@ class IRValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expected nonempty text"):
             validate(self.ir)
 
+    def test_mapped_exceptions_are_unique_qualified_names(self):
+        operation = self.ir["operations"][0]
+        operation["errors"][0]["exceptions"] = ["sample::NotFound", "std::out_of_range"]
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            ([], "expected exception types"),
+            (["sample::bad-name"], "invalid qualified C\\+\\+ name"),
+            (["sample::NotFound", "sample::NotFound"], "duplicate mapped exception"),
+        )
+        for exceptions, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                document["operations"][0]["errors"][0]["exceptions"] = exceptions
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+        operation["errors"].append({"status": 500, "type": {"kind": "named", "name": "sample::Error"},
+                                    "exceptions": ["sample::NotFound"]})
+        with self.assertRaisesRegex(ValueError, "duplicate mapped exception"):
+            validate(self.ir)
+
+    def test_mapped_exceptions_are_caught_in_declaration_order(self):
+        operation = self.ir["operations"][0]
+        operation["result"] = False
+        operation["errors"] = [
+            {"status": 404, "type": {"kind": "named", "name": "sample::Error"},
+             "exceptions": ["sample::NotFound"]},
+            {"status": 500, "type": {"kind": "named", "name": "sample::Error"},
+             "exceptions": ["std::exception"]},
+            {"status": 401, "type": {"kind": "named", "name": "sample::Error"}},
+        ]
+        routes = http_routes(self.ir, "codec.hpp")
+        self.assertIn("rig_error_body(std::type_identity<Body>{}, status, error)", routes)
+        not_found = routes.index("catch (const sample::NotFound& error)")
+        fallback = routes.index("catch (const std::exception& error)")
+        self.assertLess(not_found, fallback)
+        self.assertIn('return response{404, encode_error<sample::Error>(404, error), "get_item"};',
+                      routes)
+        self.assertNotIn("401, encode_error", routes)
+        self.assertEqual(convert(self.ir), convert(
+            {**self.ir, "operations": [{**operation, "errors": [
+                {key: value for key, value in error.items() if key != "exceptions"}
+                for error in operation["errors"]
+            ]}]}
+        ))
+
+    def test_routes_without_mapped_exceptions_need_no_error_body(self):
+        self.assertNotIn("rig_error_body", http_routes(self.ir, "codec.hpp"))
+
     def test_documented_server_error_does_not_change_function_return(self):
         operation = self.ir["operations"][0]
         operation["result"] = False
