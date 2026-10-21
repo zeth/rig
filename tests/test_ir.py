@@ -107,6 +107,15 @@ class IRValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "result: expected boolean"):
             validate(self.ir)
 
+    def test_generated_responses_identify_the_matched_operation(self):
+        routes = http_routes(self.ir, "codec.hpp")
+        self.assertIn('invalid_request(error.what(), "get_item")', routes)
+        self.assertIn('rig_json::encode(value), "get_item"', routes)
+        self.assertIn('rig_json::encode(value.body), "get_item"', routes)
+        self.ir["operations"][0]["result"] = False
+        self.assertIn('rig_json::encode(sample::get_item(std::move(*argument_0))), "get_item"',
+                      http_routes(self.ir, "codec.hpp"))
+
     def test_open_record_flag_must_be_boolean(self):
         self.ir["types"][0]["open"] = "yes"
         with self.assertRaisesRegex(ValueError, "expected boolean"):

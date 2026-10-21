@@ -133,7 +133,8 @@ so it is listed with its name and zero-based position in `context_parameters`
 rather than HTTP `parameters`. OpenAPI ignores it. The generated HTTP
 dispatcher accepts a context object and reads members with matching names,
 preserving the original C++ argument order. The hosting server can translate
-decoding failures returned by generated dispatch, so OpenAPI does not add a
+decoding failures returned by generated dispatch; each response carries the
+matched operation's IR name so the host can apply its error policy. OpenAPI does not add a
 synthetic invalid-request response for these operations.
 
 `RIG_ERROR_RESPONSE(status, Body, "Description")` declares an additional

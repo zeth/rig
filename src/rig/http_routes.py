@@ -48,9 +48,9 @@ def generate(ir, codec_header):
         "",
         "namespace rig_http {",
         "using json = nlohmann::json;",
-        "struct response { int status; json body; };",
-        "inline response invalid_request(const std::string& message) {",
-        '    return {400, json{{"code", "invalid_request"}, {"message", message}}};',
+        "struct response { int status; json body; std::string_view operation; };",
+        "inline response invalid_request(const std::string& message, std::string_view operation) {",
+        '    return {400, json{{"code", "invalid_request"}, {"message", message}}, operation};',
         "}",
         "inline void enforce_range(int value, int minimum, int maximum, const char* name) {",
         "    if (value < minimum || value > maximum)",
@@ -227,9 +227,9 @@ def generate(ir, codec_header):
                 "        try {",
                 *decodes,
                 "        } catch (const std::invalid_argument& error) {",
-                "            return invalid_request(error.what());",
+                f'            return invalid_request(error.what(), "{name}");',
                 "        } catch (const std::out_of_range& error) {",
-                "            return invalid_request(error.what());",
+                f'            return invalid_request(error.what(), "{name}");',
                 "        }",
             ]
         contexts = {item["position"]: f'context.{identifier(item["name"])}'
@@ -242,17 +242,17 @@ def generate(ir, codec_header):
             success = cpp_type(operation["returns"])
             lines += [
                 f"        const auto outcome = {call};",
-                "        return std::visit([](const auto& value) -> response {",
+                f'        return std::visit([](const auto& value) -> response {{',
                 "            using value_type = std::decay_t<decltype(value)>;",
                 f"            if constexpr (std::is_same_v<value_type, {success}>) {{",
-                "                return {200, rig_json::encode(value)};",
+                f'                return {{200, rig_json::encode(value), "{name}"}};',
                 "            } else {",
-                "                return {value_type::status, rig_json::encode(value.body)};",
+                f'                return {{value_type::status, rig_json::encode(value.body), "{name}"}};',
                 "            }",
                 "        }, outcome.value());",
             ]
         else:
-            lines.append(f"        return response{{200, rig_json::encode({call})}};")
+            lines.append(f'        return response{{200, rig_json::encode({call}), "{name}"}};')
         lines.append("    }")
     lines += [
         "    return std::nullopt;",
