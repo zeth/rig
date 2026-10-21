@@ -37,6 +37,8 @@ def generate(ir, codec_header):
             return f"std::{container}<{inner}>"
         if ref["kind"] == "map":
             return f"std::map<std::string, {cpp_type(ref['values'])}>"
+        if ref["kind"] == "variant":
+            return f"std::variant<{', '.join(cpp_type(item) for item in ref['alternatives'])}>"
         raise ValueError(f"unsupported operation parameter type: {ref['kind']}")
 
     lines = [
@@ -231,7 +233,7 @@ def generate(ir, codec_header):
             ]
             continue
         bodies = [item for item in operation["parameters"]
-                  if item["name"] not in captures and item.get("in") != "query"]
+                  if item["name"] not in captures and item.get("in") not in ("query", "header")]
         queries = [item for item in operation["parameters"] if item.get("in") == "query"]
         if len(bodies) > 1:
             raise ValueError(f"multiple body parameters in {name}")
@@ -256,10 +258,16 @@ def generate(ir, codec_header):
                 )
                 query_ref = query_value_type(parameter["type"])
                 wrapped = value_types.get(query_ref["name"]) if query_ref["kind"] == "named" else None
-                decoder = {"int": "decode_query_int", "long long": "decode_query_int64",
-                           "bool": "decode_query_bool", "std::string": "std::string"}[
-                    cpp_type(wrapped or query_ref)]
+                if query_ref["kind"] == "variant":
+                    # Every alternative decodes from the query string as JSON text.
+                    decoder = "std::string"
+                else:
+                    decoder = {"int": "decode_query_int", "long long": "decode_query_int64",
+                               "bool": "decode_query_bool", "std::string": "std::string"}[
+                        cpp_type(wrapped or query_ref)]
                 value = f"{decoder}(query_{position}->second)"
+                if query_ref["kind"] == "variant":
+                    value = f"rig_json::decode<{cpp_type(query_ref)}>(json({value}))"
                 if wrapped:
                     # The value type's codec applies its constraints.
                     value = f"rig_json::decode<{query_ref['name']}>(json({value}))"

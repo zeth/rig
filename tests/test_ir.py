@@ -289,6 +289,31 @@ class IRValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     validate(document)
 
+    def test_header_parameters_and_events_need_host_responses(self):
+        string = {"kind": "builtin", "name": "string"}
+        operation = self.ir["operations"][0]
+        operation.update(returns=string, host_response="text/event-stream",
+                         sse_events=[{"name": "ready", "type": {"kind": "named", "name": "sample::Item"}}])
+        operation["parameters"].append({"name": "cursor", "in": "header", "header": "Last-Event-ID",
+                                        "type": {"kind": "optional", "value": string}})
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            (lambda op: op.update(host_response="application/json"),
+             "require a text/event-stream host response"),
+            (lambda op: op["parameters"][1].update(header="Bad Header"), "expected an HTTP header name"),
+            (lambda op: op["parameters"][1].update(type={"kind": "builtin", "name": "int"}),
+             "a header parameter is a string"),
+            (lambda op: op["sse_events"].append(dict(op["sse_events"][0])), "duplicate event"),
+            (lambda op: [op.pop("host_response"), op.pop("sse_events")],
+             "header parameters require host_response"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                change(document["operations"][0])
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+
     def test_success_status_is_a_2xx_with_a_body(self):
         for status in (201, 202, 299):
             self.ir["operations"][0]["success_status"] = status
@@ -418,7 +443,7 @@ class IRValidationTests(unittest.TestCase):
             (lambda ir: ir["operations"][0].update(path="/items/{id}/"), "unsupported route path"),
             (lambda ir: ir["operations"][0]["parameters"].append({"name": "body", "type": {"kind": "named", "name": "sample::Item"}}), "body with GET"),
             (lambda ir: ir["operations"][0]["parameters"][0].update({"in": "query"}), "query parameter is also a path placeholder"),
-            (lambda ir: ir["operations"][0]["parameters"][0].update({"in": "header"}), "unsupported parameter location"),
+            (lambda ir: ir["operations"][0]["parameters"][0].update({"in": "cookie"}), "unsupported parameter location"),
             (lambda ir: ir["operations"][0].update(path="/items"), "body with GET"),
             (lambda ir: ir["operations"][0]["errors"].append(copy.deepcopy(ir["operations"][0]["errors"][0])), "duplicate response status"),
             (lambda ir: ir["operations"].append(copy.deepcopy(ir["operations"][0])), "duplicate operation name"),

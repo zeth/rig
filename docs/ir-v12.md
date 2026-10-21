@@ -60,6 +60,7 @@ Every field, parameter, return value, and error body has a type reference:
 | `array` | `items`: a type reference | `std::vector<T>` |
 | `optional` | `value`: a type reference | `std::optional<T>` |
 | `map` | `values`: a type reference | `std::map<std::string, T>` |
+| `variant` | `alternatives`: two or more distinct, non-optional type references | `std::variant<T...>` |
 
 An operation has `name`, `cpp_name`, `method`, `path`, `parameters`, and `returns`.
 The inspector writes `result: true` for a `rig::result` return type and
@@ -171,6 +172,13 @@ the field's schema with its constraints and the record's description, and the
 codec encodes and decodes the field, checking its constraints. A value type
 whose field is a scalar can be a query parameter, decoded through the codec.
 
+A `variant` is OpenAPI's `oneOf`. Decoding tries every alternative and
+accepts the value only when exactly one alternative accepts it, so input that
+matches none or several fails with HTTP 400; encoding writes the held
+alternative. A query parameter may be a variant when every alternative
+decodes from a string. Value types may be `RIG_INLINE_RECORD`, so a variant can
+list constrained strings inline, as `oneOf` alternatives usually are.
+
 A record with one base class emits `base`, the base record's qualified name,
 and lists only its own fields. OpenAPI emits `allOf` with a reference to the
 base and an object schema of the record's own fields. The codec encodes the
@@ -281,6 +289,16 @@ a string response may be; `RIG_FORMAT(name)` emits `response_format`, such as
 `binary`; and each `RIG_SUCCESS_RESPONSE(status, description)` emits an entry
 in `success_responses`, another 2xx status with the same body, for a host that
 chooses the status at run time.
+
+`RIG_HEADER(name)` on a string parameter of a host-response operation makes it
+a request header, emitted with `"in": "header"` and the header's `name`, which
+need not be a C++ identifier, such as `Last-Event-ID`. OpenAPI marks it
+required only when its type is not optional. Generated dispatch does not see
+request headers, so only host-response operations may declare them.
+
+Each `RIG_SSE_EVENT(name, Body)` on a `text/event-stream` host response emits an
+entry in `sse_events`; OpenAPI documents them as `x-sse-events`, a map from each
+event name to its data schema, and the body types are reachable like any other.
 
 Each `RIG_RESPONSE_HEADER(name, description)` on a host-response operation
 emits an entry in `response_headers`, which OpenAPI documents as a string

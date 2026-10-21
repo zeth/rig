@@ -47,6 +47,8 @@ struct min_properties { int value; };
 struct success_response { int status; char description[256]; };
 struct operation_id { char text[128]; };
 struct response_header { char name[64]; char description[256]; };
+struct header { char name[64]; };
+struct sse_event { char name[64]; std::meta::info body; };
 // A bool, integer or string default, chosen by the make_default overload.
 struct default_value { int kind; long long integer; bool boolean; char text[256]; };
 consteval default_value make_default(bool value) { return {1, 0, value, {}}; }
@@ -116,6 +118,8 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_SUCCESS_RESPONSE(status, description) [[=::rig::success_response{status, description}]]
 #define RIG_OPERATION_ID(text) [[=::rig::operation_id{text}]]
 #define RIG_RESPONSE_HEADER(name, description) [[=::rig::response_header{name, description}]]
+#define RIG_HEADER(name) [[=::rig::header{name}]]
+#define RIG_SSE_EVENT(name, body) [[=::rig::sse_event{name, ^^body}]]
 #define RIG_DEFAULT(value) [[=::rig::make_default(value)]]
 #define RIG_FIELD_DESCRIPTION(text) [[=::rig::field_description{text}]]
 #define RIG_OMIT_EMPTY [[=::rig::omit_empty{}]]
@@ -159,6 +163,8 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_SUCCESS_RESPONSE(status, description)
 #define RIG_OPERATION_ID(text)
 #define RIG_RESPONSE_HEADER(name, description)
+#define RIG_HEADER(name)
+#define RIG_SSE_EVENT(name, body)
 #define RIG_DEFAULT(value)
 #define RIG_FIELD_DESCRIPTION(text)
 #define RIG_OMIT_EMPTY

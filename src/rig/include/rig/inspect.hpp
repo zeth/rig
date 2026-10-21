@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 #include <optional>
+#include <variant>
 
 namespace rig {
 namespace detail {
@@ -93,6 +94,10 @@ consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& 
         const auto templ = std::meta::template_of(type);
         if (templ == ^^std::vector || templ == ^^std::optional) {
             collect_type(std::meta::template_arguments_of(type)[0], types);
+        } else if (templ == ^^std::variant) {
+            for (auto alternative : std::meta::template_arguments_of(type)) {
+                collect_type(alternative, types);
+            }
         }
         // Any other specialisation is emitted as unsupported, which validation rejects.
         return;
@@ -147,6 +152,10 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
             const auto response = std::meta::extract<rig::error_response>(
                 std::meta::constant_of(annotation));
             collect_type(response.body, types);
+        }
+        for (auto annotation : std::meta::annotations_of_with_type(member, ^^rig::sse_event)) {
+            collect_type(std::meta::extract<rig::sse_event>(std::meta::constant_of(annotation)).body,
+                         types);
         }
     }
     // Keep direct namespace types in source order so adding a route does not
@@ -269,6 +278,16 @@ void emit_type(std::ostream& output) {
             }
             emit_type<arguments[0]>(output);
             output << '}';
+        } else if constexpr (templ == ^^std::variant) {
+            output << "{\"kind\":\"variant\",\"alternatives\":[";
+            bool first = true;
+            template for (constexpr auto alternative : std::define_static_array(
+                std::meta::template_arguments_of(type))) {
+                if (!first) output << ',';
+                first = false;
+                emit_type<alternative>(output);
+            }
+            output << "]}";
         } else {
             // The converter rejects any unregistered specialization.
             output << "{\"kind\":\"unsupported\",\"name\":";
@@ -609,6 +628,20 @@ consteval bool exceptions_in_catch_order(std::meta::info function) {
     return true;
 }
 
+template <std::meta::info Annotation>
+consteval std::meta::info sse_event_body() {
+    constexpr auto event = [:std::meta::constant_of(Annotation):];
+    return event.body;
+}
+
+template <std::meta::info Annotation>
+consteval std::array<char, 64> sse_event_name() {
+    constexpr auto event = [:std::meta::constant_of(Annotation):];
+    std::array<char, 64> text{};
+    for (std::size_t index = 0; index < text.size(); ++index) text[index] = event.name[index];
+    return text;
+}
+
 template <std::meta::info Function>
 void emit_operation(std::ostream& output) {
     static_assert(exceptions_in_catch_order(Function),
@@ -689,6 +722,21 @@ void emit_operation(std::ostream& output) {
         output << ",\"response_format\":";
         quoted(output, value.text);
     }
+    if constexpr (annotation_count<Function, rig::sse_event>() > 0) {
+        output << ",\"sse_events\":[";
+        bool first_event = true;
+        template for (constexpr auto annotation : std::define_static_array(
+            std::meta::annotations_of_with_type(Function, ^^rig::sse_event))) {
+            if (!first_event) output << ',';
+            first_event = false;
+            output << "{\"name\":";
+            quoted(output, sse_event_name<annotation>().data());
+            output << ",\"type\":";
+            emit_type<sse_event_body<annotation>()>(output);
+            output << '}';
+        }
+        output << ']';
+    }
     if constexpr (annotation_count<Function, rig::response_header>() > 0) {
         output << ",\"response_headers\":[";
         bool first_header = true;
@@ -746,6 +794,15 @@ void emit_operation(std::ostream& output) {
             emit_type<std::meta::type_of(parameter)>(output);
             static_assert(queries.size() <= 1, "RIG parameters need at most one query annotation");
             if constexpr (queries.size() == 1) output << ",\"in\":\"query\"";
+            static_assert(annotation_count<parameter, rig::header>() <= 1 &&
+                          (annotation_count<parameter, rig::header>() == 0 || queries.size() == 0),
+                          "RIG parameters are at most one of a query or header parameter");
+            if constexpr (annotation_count<parameter, rig::header>() == 1) {
+                constexpr auto value = [:std::meta::constant_of(
+                    std::meta::annotations_of_with_type(parameter, ^^rig::header)[0]):];
+                output << ",\"in\":\"header\",\"header\":";
+                quoted(output, value.name);
+            }
             constexpr auto ranges = std::define_static_array(
                 std::meta::annotations_of_with_type(parameter, ^^rig::range));
             static_assert(ranges.size() <= 1, "RIG parameters need at most one range annotation");

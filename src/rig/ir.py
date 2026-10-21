@@ -335,7 +335,7 @@ def validate(document):
             _unique(member_names, member_name, member_location, label)
 
     def type_ref(ref, location):
-        ref = _object(ref, location, ("kind",), ("name", "items", "value", "values"))
+        ref = _object(ref, location, ("kind",), ("name", "items", "value", "values", "alternatives"))
         kind = ref["kind"]
         if kind == "builtin":
             _object(ref, location, ("kind", "name"))
@@ -350,6 +350,16 @@ def validate(document):
             child = {"array": "items", "optional": "value", "map": "values"}[kind]
             _object(ref, location, ("kind", child))
             type_ref(ref[child], f"{location}.{child}")
+        elif kind == "variant":
+            _object(ref, location, ("kind", "alternatives"))
+            alternatives = _array(ref["alternatives"], f"{location}.alternatives")
+            if len(alternatives) < 2:
+                raise ValueError(f"{location}.alternatives: expected at least two")
+            for index, alternative in enumerate(alternatives):
+                type_ref(alternative, f"{location}.alternatives[{index}]")
+                if alternative["kind"] == "optional" or alternatives.index(alternative) != index:
+                    raise ValueError(f"{location}.alternatives[{index}]: expected a distinct, "
+                                     "non-optional alternative")
         else:
             raise ValueError(f"{location}: unsupported type kind: {kind!r}")
 
@@ -363,9 +373,7 @@ def validate(document):
         if entry.get("value") is not None:
             if entry["value"] is not True:
                 raise ValueError(f"{location}.value: expected true")
-            if len(entry["fields"]) != 1 or entry["fields"][0].get("omit_empty") or (
-                "base" in entry or entry.get("inline")
-            ):
+            if len(entry["fields"]) != 1 or entry["fields"][0].get("omit_empty") or "base" in entry:
                 raise ValueError(f"{location}: a value type has exactly one required field "
                                  "and no base")
         if "base" in entry:
@@ -409,7 +417,7 @@ def validate(document):
             ("name", "cpp_name", "method", "path", "parameters", "returns", "result"),
             ("errors", "summary", "description", "response_description", "context_parameters",
              "public", "host_response", "success_status", "operation_id", "response_values",
-             "response_format", "success_responses", "response_headers"),
+             "response_format", "success_responses", "response_headers", "sse_events"),
         )
         if type(operation["result"]) is not bool:
             raise ValueError(f"{location}.result: expected boolean")
@@ -444,6 +452,16 @@ def validate(document):
                 not FORMAT.fullmatch(operation["response_format"])
             ):
                 raise ValueError(f"{location}.response_format: expected a format for a string response")
+        if "sse_events" in operation and operation.get("host_response") != "text/event-stream":
+            raise ValueError(f"{location}.sse_events: require a text/event-stream host response")
+        event_names = set()
+        for index, event in enumerate(_array(operation.get("sse_events", []), f"{location}.sse_events")):
+            event_location = f"{location}.sse_events[{index}]"
+            event = _object(event, event_location, ("name", "type"))
+            if not isinstance(event["name"], str) or not event["name"]:
+                raise ValueError(f"{event_location}.name: expected nonempty text")
+            _unique(event_names, event["name"], event_location, "event")
+            type_ref(event["type"], f"{event_location}.type")
         header_names = set()
         for index, header in enumerate(_array(operation.get("response_headers", []),
                                               f"{location}.response_headers")):
@@ -508,7 +526,8 @@ def validate(document):
             parameter_location = f"{location}.parameters[{parameter_index}]"
             parameter = _object(parameter, parameter_location, ("name", "type"),
                                 ("in", "range", "int_values", "description", "string_values",
-                                 "minimum", "format", "min_length", "max_length", "default"))
+                                 "minimum", "format", "min_length", "max_length", "default",
+                                 "pattern", "header"))
             parameter_name = _name(parameter["name"], f"{parameter_location}.name")
             _unique(parameter_names, parameter_name, parameter_location, "parameter")
             if parameter_name in context_names:
@@ -561,11 +580,25 @@ def validate(document):
             ):
                 raise ValueError(f"{parameter_location}.default: requires a query parameter "
                                  "whose type is not optional")
-            if "in" in parameter:
+            if parameter.get("in") == "header":
+                # Generated dispatch does not see request headers, so only the host reads them.
+                if not isinstance(parameter.get("header"), str) or not HEADER.fullmatch(parameter["header"]):
+                    raise ValueError(f"{parameter_location}.header: expected an HTTP header name")
+                if query_value_type(parameter["type"]) != STRING:
+                    raise ValueError(f"{parameter_location}: a header parameter is a string")
+                if not host_served:
+                    raise ValueError(f"{parameter_location}: header parameters require host_response")
+            elif "header" in parameter:
+                raise ValueError(f"{parameter_location}.header: requires in header")
+            elif "in" in parameter:
                 if parameter["in"] != "query":
                     raise ValueError(f"{parameter_location}.in: unsupported parameter location")
                 query_ref = scalar(query_value_type(parameter["type"]))
-                if query_ref["kind"] != "builtin" or query_ref["name"] not in {
+                if query_ref["kind"] == "variant":
+                    # A query value is text, so each alternative must decode from a string.
+                    if any(scalar(alternative) != STRING for alternative in query_ref["alternatives"]):
+                        raise ValueError(f"{parameter_location}: query variant alternatives must be strings")
+                elif query_ref["kind"] != "builtin" or query_ref["name"] not in {
                     "int", "int64", "bool", "string"
                 }:
                     raise ValueError(f"{parameter_location}: query parameter must be scalar or optional scalar")
@@ -593,7 +626,7 @@ def validate(document):
         routes[route] = segments
         bodies = {
             parameter["name"] for parameter in parameters
-            if parameter["name"] not in captures and parameter.get("in") != "query"
+            if parameter["name"] not in captures and parameter.get("in") not in ("query", "header")
         }
         if len(bodies) > 1:
             raise ValueError(f"{location}: operation {name} has multiple body parameters")

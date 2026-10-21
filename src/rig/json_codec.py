@@ -70,6 +70,8 @@ def generate(ir, api_header):
             return f"std::{container}<{inner}>"
         if kind == "map":
             return f"std::map<std::string, {cpp_type(ref['values'])}>"
+        if kind == "variant":
+            return f"std::variant<{', '.join(cpp_type(item) for item in ref['alternatives'])}>"
         raise ValueError(f"unsupported type kind: {kind}")
 
     lines = [
@@ -84,6 +86,8 @@ def generate(ir, api_header):
         "#include <optional>",
         "#include <stdexcept>",
         "#include <string>",
+        "#include <type_traits>",
+        "#include <variant>",
         "#include <vector>",
         "",
         "namespace rig_json {",
@@ -156,6 +160,33 @@ def generate(ir, api_header):
         "        for (auto it = value.begin(); it != value.end(); ++it)",
         "            result.emplace(it.key(), codec<T>::decode(it.value()));",
         "        return result;",
+        "    }",
+        "};",
+        "// OpenAPI oneOf: exactly one alternative must accept the value.",
+        "template <typename... Ts> struct codec<std::variant<Ts...>> {",
+        "    static json encode(const std::variant<Ts...>& value) {",
+        "        return std::visit([](const auto& item) {",
+        "            return codec<std::decay_t<decltype(item)>>::encode(item);",
+        "        }, value);",
+        "    }",
+        "    static std::variant<Ts...> decode(const json& value) {",
+        "        std::optional<std::variant<Ts...>> result;",
+        "        int matches = 0;",
+        "        (try_alternative<Ts>(value, result, matches), ...);",
+        "        if (matches == 0) throw std::invalid_argument(\"no alternative matches\");",
+        "        if (matches > 1) throw std::invalid_argument(\"several alternatives match\");",
+        "        return std::move(*result);",
+        "    }",
+        "    template <typename T>",
+        "    static void try_alternative(const json& value, std::optional<std::variant<Ts...>>& result,",
+        "                                int& matches) {",
+        "        try {",
+        "            T decoded = codec<T>::decode(value);",
+        "            if (!result) result.emplace(std::in_place_type<T>, std::move(decoded));",
+        "            ++matches;",
+        "        } catch (const std::invalid_argument&) {",
+        "        } catch (const json::exception&) {",
+        "        }",
         "    }",
         "};",
         "template <typename T> struct codec<std::vector<T>> {",
@@ -250,6 +281,9 @@ def generate(ir, api_header):
         elif entry.get("value"):
             field = entry["fields"][0]
             checks = value_checks(field, "value")
+            if "string_values" in field:
+                invalid = " && ".join(f"value != {json.dumps(choice)}" for choice in field["string_values"])
+                checks.append(f'        if ({invalid}) throw std::invalid_argument("invalid {field["name"]}");')
             if checks:
                 lines += ["    if (value.is_string()) {", *checks, "    }"]
             lines.append(f"    return {qualified}{{codec<{cpp_type(field['type'])}>::decode(value)}};")

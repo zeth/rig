@@ -750,6 +750,139 @@ class InspectorTests(unittest.TestCase):
             run = subprocess.run([binary], cwd=directory, capture_output=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_variants_are_one_of(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <optional>\n#include <string>\n#include <variant>\n'
+                'namespace sample {\n'
+                'struct RIG_VALUE_TYPE RIG_INLINE_RECORD Roots {\n'
+                '  std::string value RIG_STRING_VALUES("roots");\n'
+                '};\n'
+                'struct RIG_VALUE_TYPE RIG_INLINE_RECORD CardId {\n'
+                '  std::string value RIG_FORMAT("uuid") RIG_PATTERN("^[0-9a-f-]{36}$");\n'
+                '};\n'
+                'struct Circle { double radius; };\n'
+                'struct Square { double side; };\n'
+                'struct RIG_OPEN_RECORD Anything { std::optional<double> radius RIG_OMIT_EMPTY; };\n'
+                'struct Drawing { std::variant<Circle, Square> shape; };\n'
+                'struct Loose { std::variant<Circle, Anything> shape; };\n'
+                'RIG_ROUTE(GET, "/cards") std::string list_cards(\n'
+                '    std::optional<std::variant<Roots, CardId>> parent RIG_QUERY);\n'
+                'RIG_ROUTE(PUT, "/drawing") Drawing draw(Drawing drawing);\n'
+                'RIG_ROUTE(PUT, "/loose") Loose loose(Loose loose);\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            document = subprocess.run(
+                [sys.executable, "-m", "rig", "openapi"], input=result.stdout, cwd=directory,
+                text=True, capture_output=True,
+            )
+            self.assertEqual(document.returncode, 0, document.stderr)
+            openapi = json.loads(document.stdout)
+            self.assertEqual(openapi["paths"]["/cards"]["get"]["parameters"][0], {
+                "name": "parent", "in": "query", "required": False, "schema": {"oneOf": [
+                    {"type": "string", "enum": ["roots"]},
+                    {"type": "string", "format": "uuid", "pattern": "^[0-9a-f-]{36}$"},
+                ]}})
+            self.assertEqual(openapi["components"]["schemas"]["Drawing"]["properties"]["shape"],
+                             {"oneOf": [{"$ref": "#/components/schemas/Circle"},
+                                        {"$ref": "#/components/schemas/Square"}]})
+            self.assertNotIn("Roots", openapi["components"]["schemas"])
+            for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
+                                          ("http-routes", "--codec-header", "routes.hpp")):
+                generated = subprocess.run(
+                    [sys.executable, "-m", "rig", command, flag,
+                     "api.hpp" if command == "json-codec" else "codec.hpp"],
+                    input=result.stdout, cwd=directory, text=True, capture_output=True,
+                )
+                self.assertEqual(generated.returncode, 0, generated.stderr)
+                (root / output).write_text(generated.stdout)
+            (root / "check.cpp").write_text(
+                '#include "routes.hpp"\n'
+                'std::string sample::list_cards(std::optional<std::variant<Roots, CardId>> parent) {\n'
+                '  if (!parent) return "all";\n'
+                '  return std::visit([](const auto& item) { return item.value; }, *parent);\n'
+                '}\n'
+                'sample::Drawing sample::draw(Drawing drawing) { return drawing; }\n'
+                'sample::Loose sample::loose(Loose loose) { return loose; }\n'
+                'int status(const char* method, const char* path, const char* body = "") {\n'
+                '  const auto response = rig_http::dispatch(method, path, body);\n'
+                '  return response ? response->status : 0;\n'
+                '}\n'
+                'int main() {\n'
+                '  const char* id = "123e4567-e89b-42d3-a456-426614174000";\n'
+                '  auto roots = rig_http::dispatch("GET", "/cards?parent=roots", "");\n'
+                '  if (!roots || roots->body != "roots") return 1;\n'
+                '  auto card = rig_http::dispatch("GET", std::string("/cards?parent=") + id, "");\n'
+                '  if (!card || card->body != id) return 2;\n'
+                '  auto all = rig_http::dispatch("GET", "/cards", "");\n'
+                '  if (!all || all->body != "all") return 3;\n'
+                '  if (status("GET", "/cards?parent=leaves") != 400) return 4;\n'
+                '  auto square = rig_http::dispatch("PUT", "/drawing", R"({"shape":{"side":2}})");\n'
+                '  if (!square || square->body["shape"]["side"] != 2) return 5;\n'
+                '  if (status("PUT", "/drawing", R"({"shape":{"edge":2}})") != 400) return 6;\n'
+                '  // A circle is also an Anything, so this matches two alternatives.\n'
+                '  if (status("PUT", "/loose", R"({"shape":{"radius":1}})") != 400) return 7;\n'
+                '  if (status("PUT", "/loose", R"({"shape":{"colour":"red"}})") != 200) return 8;\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = root / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", "-Wall", "-Wextra", "-Werror", f"-I{include_dir}", "-I.",
+                 "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_streams_declare_headers_and_events(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <optional>\n#include <string>\n'
+                'namespace sample {\n'
+                'struct Ready { std::string cursor; };\n'
+                'struct Changed { std::string id; };\n'
+                'RIG_ROUTE(GET, "/events")\n'
+                'RIG_HOST_RESPONSE("text/event-stream")\n'
+                'RIG_SSE_EVENT("ready", Ready)\n'
+                'RIG_SSE_EVENT("changed", Changed)\n'
+                'std::string stream_events(\n'
+                '    std::optional<std::string> last_event_id RIG_HEADER("Last-Event-ID")\n'
+                '        RIG_PARAMETER_DESCRIPTION("Resume after this event."),\n'
+                '    std::optional<std::string> project_id RIG_QUERY);\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            ir = json.loads(result.stdout)
+            self.assertEqual([entry["name"] for entry in ir["types"]], ["Ready", "Changed"])
+            self.assertEqual(ir["operations"][0]["parameters"][0]["header"], "Last-Event-ID")
+            document = subprocess.run(
+                [sys.executable, "-m", "rig", "openapi"], input=result.stdout, cwd=directory,
+                text=True, capture_output=True,
+            )
+            self.assertEqual(document.returncode, 0, document.stderr)
+            operation = json.loads(document.stdout)["paths"]["/events"]["get"]
+            self.assertEqual(operation["parameters"][0], {
+                "name": "Last-Event-ID", "in": "header", "schema": {"type": "string"},
+                "description": "Resume after this event."})
+            self.assertEqual(operation["x-sse-events"], {
+                "ready": {"$ref": "#/components/schemas/Ready"},
+                "changed": {"$ref": "#/components/schemas/Changed"}})
+            self.assertNotIn("requestBody", operation)
+            routes = subprocess.run(
+                [sys.executable, "-m", "rig", "http-routes", "--codec-header", "codec.hpp"],
+                input=result.stdout, cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(routes.returncode, 0, routes.stderr)
+            self.assertIn("stream_events is served by the host", routes.stdout)
+
     def test_ordered_json_is_not_a_free_form_object(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "api.hpp").write_text(

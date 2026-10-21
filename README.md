@@ -210,8 +210,12 @@ and `RIG_DEFAULT(50)` describe fields and parameters, and
 `RIG_PATTERN("^[0-9a-f]+$")` restricts a string. `RIG_VALUE_TYPE` on a
 one-field struct gives a named schema that is not an object, such as a
 constrained string, and a record that extends another becomes `allOf`.
-`RIG_MIN_PROPERTIES(1)` makes a partial update change something, and
-`RIG_OPERATION_ID("name")` fixes an operation's `operationId`.
+A `std::variant<A, B>` is `oneOf`: decoding accepts a value
+only when exactly one alternative does. `RIG_MIN_PROPERTIES(1)` makes a
+partial update change something, and
+`RIG_OPERATION_ID("name")` fixes an operation's `operationId`. An event
+stream declares `RIG_SSE_EVENT("ready", Ready)` for each event and reads
+`Last-Event-ID` through a parameter marked `RIG_HEADER("Last-Event-ID")`.
 
 `RIG_HOST_RESPONSE("text/event-stream")` declares an operation whose response
 the host writes, such as an event stream or a file download. RIG documents it

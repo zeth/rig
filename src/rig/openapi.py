@@ -47,6 +47,8 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             raise ValueError(f"unregistered type: {name}")
         if kind == "array":
             return {"type": "array", "items": schema(type_ref["items"])}
+        if kind == "variant":
+            return {"oneOf": [schema(alternative) for alternative in type_ref["alternatives"]]}
         if kind == "map":
             return {"type": "object", "additionalProperties": schema(type_ref["values"])}
         if kind == "optional":
@@ -208,6 +210,15 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 if "description" in parameter:
                     item["description"] = parameter["description"]
                 parameters.append(item)
+            elif parameter.get("in") == "header":
+                item = {"name": parameter["header"], "in": "header",
+                        "schema": parameter_schema(parameter, query=True)}
+                # A header is optional unless required, so only a required one says so.
+                if parameter["type"]["kind"] != "optional":
+                    item["required"] = True
+                if "description" in parameter:
+                    item["description"] = parameter["description"]
+                parameters.append(item)
             else:
                 bodies.append(parameter)
 
@@ -228,6 +239,9 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 "content": {media_type: {"schema": success_schema}}
             }
         }
+        if "sse_events" in operation:
+            result["x-sse-events"] = {event["name"]: schema(event["type"])
+                                      for event in operation["sse_events"]}
         if "response_headers" in operation:
             headers = {header["name"]: {"description": header["description"],
                                         "schema": {"type": "string"}}
