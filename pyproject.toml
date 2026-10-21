@@ -7,6 +7,7 @@ name = "rig-interface-generator"
 version = "0.1.0"
 description = "Generate interfaces from C++ declarations using static reflection"
 requires-python = ">=3.11"
+dependencies = ["PyYAML>=6"]
 
 [project.scripts]
 rig = "rig.cli:main"

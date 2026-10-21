@@ -300,6 +300,11 @@ Each `RIG_SSE_EVENT(name, Body)` on a `text/event-stream` host response emits an
 entry in `sse_events`; OpenAPI documents them as `x-sse-events`, a map from each
 event name to its data schema, and the body types are reachable like any other.
 
+`rig openapi` writes JSON, or YAML with `--format yaml`, in an order that does
+not depend on where declarations live: paths and schemas sorted by name,
+methods and operation keys in OpenAPI's usual order, responses by status. The
+same IR therefore always gives the same bytes.
+
 Each `RIG_RESPONSE_HEADER(name, description)` on a host-response operation
 emits an entry in `response_headers`, which OpenAPI documents as a string
 header on its success responses.

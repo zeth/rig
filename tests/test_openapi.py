@@ -1,7 +1,8 @@
+import json
 import unittest
 
 from rig.http_routes import generate as generate_routes
-from rig.openapi import convert
+from rig.openapi import convert, dumps
 
 
 class ConversionTests(unittest.TestCase):
@@ -274,6 +275,32 @@ class ConversionTests(unittest.TestCase):
                                               "description": "Again."})
         with self.assertRaisesRegex(ValueError, "duplicate response header"):
             convert(self.ir)
+
+    def test_documents_are_ordered_independently_of_declarations(self):
+        result = {"kind": "named", "name": "sample::Result"}
+        self.ir["types"].insert(0, {"kind": "record", "name": "Zebra", "cpp_name": "sample::Zebra",
+                                    "fields": []})
+        self.ir["operations"].insert(0, {
+            "name": "zoo", "cpp_name": "sample::zoo", "method": "POST", "path": "/zoo",
+            "parameters": [], "returns": {"kind": "named", "name": "sample::Zebra"},
+            "result": False, "summary": "Zoo",
+            "errors": [{"status": 409, "type": result}, {"status": 400, "type": result}],
+        })
+        document = convert(self.ir)
+        self.assertEqual(list(document), ["openapi", "info", "paths", "components"])
+        self.assertEqual(list(document["paths"]), ["/results/{id}", "/zoo"])
+        self.assertEqual(list(document["components"]["schemas"]), ["Result", "RigInvalidRequest", "Zebra"])
+        zoo = document["paths"]["/zoo"]["post"]
+        self.assertEqual(list(zoo), ["operationId", "summary", "responses"])
+        self.assertEqual(list(zoo["responses"]), ["200", "400", "409"])
+
+    def test_yaml_and_json_describe_the_same_document(self):
+        import yaml
+        self.ir["operations"][0]["description"] = "Uses: colons, # hashes and 'quotes'."
+        document = convert(self.ir)
+        self.assertEqual(yaml.safe_load(dumps(document, "yaml")), document)
+        self.assertEqual(json.loads(dumps(document, "json")), document)
+        self.assertTrue(dumps(document, "yaml").endswith("\n"))
 
     def test_recursive_inline_record_is_rejected(self):
         self.ir["types"][0]["inline"] = True

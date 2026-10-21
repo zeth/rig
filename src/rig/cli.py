@@ -10,7 +10,7 @@ from .http_routes import generate as http_routes
 from .ir import validate
 from .inspector import inspect
 from .json_codec import generate as json_codec
-from .openapi import convert
+from .openapi import convert, dumps
 
 
 def main(argv=None):
@@ -34,7 +34,9 @@ def main(argv=None):
         "Pass additional compiler flags after --, for example: -- -Iinclude"
     )
     commands.add_parser("validate", help="validate IR on stdin")
-    openapi = commands.add_parser("openapi", help="generate OpenAPI JSON from IR on stdin")
+    openapi = commands.add_parser("openapi", help="generate an OpenAPI document from IR on stdin")
+    openapi.add_argument("--format", choices=("json", "yaml"), default="json",
+                         help="output format (default: json)")
     openapi.add_argument("--title", default="API")
     openapi.add_argument("--version", default="0.1.0")
     openapi.add_argument("--omit-operation-ids", action="store_true",
@@ -60,10 +62,10 @@ def main(argv=None):
             if args.command == "validate":
                 validate(ir)
             elif args.command == "openapi":
-                json.dump(convert(ir, args.title, args.version,
-                                  include_operation_ids=not args.omit_operation_ids),
-                          sys.stdout, indent=2)
-                sys.stdout.write("\n")
+                sys.stdout.write(dumps(convert(
+                    ir, args.title, args.version,
+                    include_operation_ids=not args.omit_operation_ids,
+                ), args.format))
             elif args.command == "json-codec":
                 sys.stdout.write(json_codec(ir, args.api_header))
             else:

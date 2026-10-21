@@ -1,5 +1,6 @@
 """Translate RIG's small C++ declaration IR into OpenAPI 3.1 JSON."""
 
+import json
 import re
 
 from .ir import public_names, query_value_type, request_needs_decoding, validate
@@ -316,4 +317,48 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 }
             }
             document["security"] = [{name: []}]
-    return document
+    return ordered(document)
+
+
+METHOD_ORDER = ("get", "put", "post", "patch", "delete")
+OPERATION_ORDER = ("operationId", "summary", "description", "security", "parameters",
+                   "requestBody", "responses", "x-sse-events")
+
+
+def _in_order(mapping, order):
+    """The mapping with known keys in the given order, then any others."""
+    keys = [key for key in order if key in mapping] + [key for key in mapping if key not in order]
+    return {key: mapping[key] for key in keys}
+
+
+def ordered(document):
+    """Order a document so it does not depend on where declarations live.
+
+    Paths and schemas are sorted by name, methods and operation keys follow
+    OpenAPI's usual order, and responses are sorted by status.
+    """
+    paths = {}
+    for path in sorted(document["paths"]):
+        methods = _in_order(document["paths"][path], METHOD_ORDER)
+        paths[path] = {}
+        for method, operation in methods.items():
+            operation = _in_order(operation, OPERATION_ORDER)
+            operation["responses"] = dict(sorted(operation["responses"].items()))
+            paths[path][method] = operation
+    components = {key: document["components"][key]
+                  for key in ("securitySchemes", "schemas") if key in document["components"]}
+    components["schemas"] = dict(sorted(components["schemas"].items()))
+    result = _in_order(document, ("openapi", "info", "servers", "security", "paths", "components"))
+    result["paths"] = paths
+    result["components"] = components
+    return result
+
+
+def dumps(document, output_format="json"):
+    """Serialize a document as JSON or YAML, with a final newline."""
+    if output_format == "json":
+        return json.dumps(document, indent=2) + "\n"
+    import yaml  # Only YAML output needs PyYAML.
+    # Lists and maps of plain values stay on one line, as hand-written OpenAPI usually has them.
+    return yaml.safe_dump(document, sort_keys=False, allow_unicode=True, width=100,
+                          default_flow_style=None)

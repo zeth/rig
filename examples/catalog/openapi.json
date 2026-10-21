@@ -5,46 +5,19 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/items/{id}": {
+    "/items": {
       "get": {
-        "operationId": "get_item",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Item"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RigInvalidRequest"
-                }
-              }
-            }
-          }
-        },
+        "operationId": "list_items",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
+            "name": "limit",
+            "in": "query",
+            "required": false,
             "schema": {
               "type": "integer"
             }
           }
-        ]
-      }
-    },
-    "/items": {
-      "get": {
-        "operationId": "list_items",
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -66,20 +39,20 @@
               }
             }
           }
-        },
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ]
+        }
       },
       "post": {
         "operationId": "create_item",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Item"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success",
@@ -101,13 +74,40 @@
               }
             }
           }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Item"
+        }
+      }
+    },
+    "/items/{id}": {
+      "get": {
+        "operationId": "get_item",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Item"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RigInvalidRequest"
+                }
               }
             }
           }

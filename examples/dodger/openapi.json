@@ -8,35 +8,6 @@
     "/games": {
       "post": {
         "operationId": "create_game",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GameState"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/RigInvalidRequest"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
         "parameters": [
           {
             "name": "width",
@@ -58,12 +29,7 @@
               "maximum": 40
             }
           }
-        ]
-      }
-    },
-    "/games/{id}": {
-      "get": {
-        "operationId": "get_game",
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -75,12 +41,46 @@
               }
             }
           },
-          "404": {
+          "400": {
             "description": "Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RigInvalidRequest"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games/{id}": {
+      "get": {
+        "operationId": "get_game",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameState"
                 }
               }
             }
@@ -94,50 +94,6 @@
                 }
               }
             }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ]
-      }
-    },
-    "/games/{id}/players/2/actions": {
-      "post": {
-        "operationId": "submit_action",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GameState"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/RigInvalidRequest"
-                    }
-                  ]
-                }
-              }
-            }
           },
           "404": {
             "description": "Error",
@@ -146,36 +102,6 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
-              }
-            }
-          },
-          "409": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Action"
               }
             }
           }
@@ -185,6 +111,26 @@
     "/games/{id}/players/1/actions": {
       "post": {
         "operationId": "submit_human_action",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Action"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success",
@@ -233,7 +179,12 @@
               }
             }
           }
-        },
+        }
+      }
+    },
+    "/games/{id}/players/2/actions": {
+      "post": {
+        "operationId": "submit_action",
         "parameters": [
           {
             "name": "id",
@@ -253,76 +204,61 @@
               }
             }
           }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RigInvalidRequest"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     }
   },
   "components": {
     "schemas": {
-      "Move": {
-        "type": "string",
-        "enum": [
-          "Left",
-          "Stay",
-          "Right"
-        ]
-      },
-      "GameStatus": {
-        "type": "string",
-        "enum": [
-          "Waiting",
-          "Running",
-          "Finished"
-        ]
-      },
-      "Winner": {
-        "type": "string",
-        "enum": [
-          "Human",
-          "Bot",
-          "Draw"
-        ]
-      },
-      "Player": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "integer"
-          },
-          "lives": {
-            "type": "integer"
-          },
-          "shove_cooldown_ticks": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "x",
-          "lives",
-          "shove_cooldown_ticks"
-        ],
-        "additionalProperties": false
-      },
-      "Obstacle": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "integer"
-          },
-          "y": {
-            "type": "integer"
-          },
-          "width": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "x",
-          "y",
-          "width"
-        ],
-        "additionalProperties": false
-      },
       "Action": {
         "type": "object",
         "properties": {
@@ -336,6 +272,18 @@
         "required": [
           "move",
           "shove"
+        ],
+        "additionalProperties": false
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
         ],
         "additionalProperties": false
       },
@@ -393,15 +341,59 @@
         ],
         "additionalProperties": false
       },
-      "ErrorResponse": {
+      "GameStatus": {
+        "type": "string",
+        "enum": [
+          "Waiting",
+          "Running",
+          "Finished"
+        ]
+      },
+      "Move": {
+        "type": "string",
+        "enum": [
+          "Left",
+          "Stay",
+          "Right"
+        ]
+      },
+      "Obstacle": {
         "type": "object",
         "properties": {
-          "error": {
-            "type": "string"
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "width": {
+            "type": "integer"
           }
         },
         "required": [
-          "error"
+          "x",
+          "y",
+          "width"
+        ],
+        "additionalProperties": false
+      },
+      "Player": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "lives": {
+            "type": "integer"
+          },
+          "shove_cooldown_ticks": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "lives",
+          "shove_cooldown_ticks"
         ],
         "additionalProperties": false
       },
@@ -423,6 +415,14 @@
           "message"
         ],
         "additionalProperties": false
+      },
+      "Winner": {
+        "type": "string",
+        "enum": [
+          "Human",
+          "Bot",
+          "Draw"
+        ]
       }
     }
   }

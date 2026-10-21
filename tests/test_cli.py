@@ -25,6 +25,10 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(self.run_rig("validate", input_text=json.dumps(ir)), "")
         document = self.run_rig("openapi", "--title", "Test", input_text=json.dumps(ir))
         self.assertEqual(json.loads(document)["info"]["title"], "Test")
+        yaml_document = self.run_rig("openapi", "--title", "Test", "--format", "yaml",
+                                     input_text=json.dumps(ir))
+        import yaml
+        self.assertEqual(yaml.safe_load(yaml_document), json.loads(document))
         header = self.run_rig("embed-openapi", input_text=document)
         self.assertIn(f"openapi_json{{openapi_bytes, {len(document.encode())}}}", header)
 
