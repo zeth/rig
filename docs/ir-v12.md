@@ -55,10 +55,11 @@ Every field, parameter, return value, and error body has a type reference:
 
 | Kind | Members | Meaning |
 | --- | --- | --- |
-| `builtin` | `name`: `int`, `int64`, `double`, `bool`, or `string` | C++ `int`, `long long`, `double`, `bool`, or `std::string` |
+| `builtin` | `name`: `int`, `int64`, `double`, `bool`, `string`, or `object` | C++ `int`, `long long`, `double`, `bool`, `std::string`, or `nlohmann::json` |
 | `named` | `name`: a declared qualified C++ type name | Record or enum |
 | `array` | `items`: a type reference | `std::vector<T>` |
 | `optional` | `value`: a type reference | `std::optional<T>` |
+| `map` | `values`: a type reference | `std::map<std::string, T>` |
 
 An operation has `name`, `cpp_name`, `method`, `path`, `parameters`, and `returns`.
 The inspector writes `result: true` for a `rig::result` return type and
@@ -121,7 +122,17 @@ union that includes `null`. `RIG_OMIT_EMPTY` allows an optional field to be
 absent when it has no value, and OpenAPI excludes it from `required`. The two
 annotations can be combined on `std::optional<std::optional<T>>`: the outer
 optional controls omission and the inner optional controls `null`. Successful
-operations have a JSON response with HTTP 200. Unknown keys and unsupported
+operations have a JSON response with HTTP 200, or with the status from
+`RIG_SUCCESS_STATUS(status)`, emitted as `success_status`: a 2xx status other
+than 204 or 205, since every success response has a body.
+
+The `object` builtin is a free-form JSON object: OpenAPI emits `type: object`
+with `additionalProperties: true`, and the codec accepts any object. The
+inspector recognises `nlohmann::json` by shape, without including nlohmann; a
+`basic_json` with a different object type, such as `nlohmann::ordered_json`,
+is unsupported. A `map` is a JSON object whose member values share one type;
+OpenAPI emits `additionalProperties` with that type's schema. Any other
+template specialisation is unsupported and rejected. Unknown keys and unsupported
 types are rejected so that every generator interprets version 12 the same way.
 Older IR is rejected; regenerate it with `rig inspect` before running the
 version 12 generators. `json-codec` and `http-routes` use `cpp_name` and no

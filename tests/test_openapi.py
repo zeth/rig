@@ -209,6 +209,28 @@ class ConversionTests(unittest.TestCase):
         self.assertLess(routes.index("// stream is served by the host"),
                         routes.index("sample::get_result("))
 
+    def test_free_form_objects_maps_and_success_status(self):
+        obj = {"kind": "builtin", "name": "object"}
+        self.ir["types"][0]["fields"] += [
+            {"name": "context", "type": obj},
+            {"name": "trace", "type": {"kind": "optional", "value": obj}, "nullable": True},
+            {"name": "labels", "type": {"kind": "map", "values": {
+                "kind": "builtin", "name": "string"}}},
+        ]
+        self.ir["operations"][0]["success_status"] = 201
+        document = convert(self.ir)
+        properties = document["components"]["schemas"]["Result"]["properties"]
+        self.assertEqual(properties["context"], {"type": "object", "additionalProperties": True})
+        self.assertEqual(properties["trace"],
+                         {"type": ["object", "null"], "additionalProperties": True})
+        self.assertEqual(properties["labels"],
+                         {"type": "object", "additionalProperties": {"type": "string"}})
+        responses = document["paths"]["/results/{id}"]["get"]["responses"]
+        self.assertIn("201", responses)
+        self.assertNotIn("200", responses)
+        routes = generate_routes(self.ir, "codec.hpp")
+        self.assertIn("return response{201, rig_json::encode(sample::get_result(", routes)
+
     def test_recursive_inline_record_is_rejected(self):
         self.ir["types"][0]["inline"] = True
         self.ir["types"][0]["fields"].append({

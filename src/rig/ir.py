@@ -5,7 +5,7 @@ from collections import Counter
 
 
 VERSION = 12
-BUILTINS = {"int", "int64", "double", "bool", "string"}
+BUILTINS = {"int", "int64", "double", "bool", "string", "object"}
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
 PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z_0-9]*)\}\Z")
@@ -266,7 +266,7 @@ def validate(document):
             _unique(member_names, member_name, member_location, label)
 
     def type_ref(ref, location):
-        ref = _object(ref, location, ("kind",), ("name", "items", "value"))
+        ref = _object(ref, location, ("kind",), ("name", "items", "value", "values"))
         kind = ref["kind"]
         if kind == "builtin":
             _object(ref, location, ("kind", "name"))
@@ -277,8 +277,8 @@ def validate(document):
             name = cpp_name(ref["name"])
             if name not in names:
                 raise ValueError(f"{location}: unregistered type: {name}")
-        elif kind in ("array", "optional"):
-            child = "items" if kind == "array" else "value"
+        elif kind in ("array", "optional", "map"):
+            child = {"array": "items", "optional": "value", "map": "values"}[kind]
             _object(ref, location, ("kind", child))
             type_ref(ref[child], f"{location}.{child}")
         else:
@@ -306,7 +306,7 @@ def validate(document):
             operation, location,
             ("name", "cpp_name", "method", "path", "parameters", "returns", "result"),
             ("errors", "summary", "description", "response_description", "context_parameters",
-             "public", "host_response"),
+             "public", "host_response", "success_status"),
         )
         if type(operation["result"]) is not bool:
             raise ValueError(f"{location}.result: expected boolean")
@@ -322,6 +322,11 @@ def validate(document):
                                  "requires a string return")
             if operation.get("context_parameters"):
                 raise ValueError(f"{location}: host-response operations have no context parameters")
+        if "success_status" in operation:
+            status = operation["success_status"]
+            # Every success response has a body, which 204 and 205 cannot.
+            if type(status) is not int or not 200 <= status <= 299 or status in (204, 205):
+                raise ValueError(f"{location}.success_status: expected a 2xx status with a body")
         if "public" in operation:
             if operation["public"] is not True:
                 raise ValueError(f"{location}.public: expected true")

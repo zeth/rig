@@ -55,6 +55,7 @@ struct unauthorized { std::meta::info body; char description[256]; };
 struct internal_error { std::meta::info body; char description[256]; };
 struct public_operation {};
 struct host_response { char media_type[128]; };
+struct success_status { int status; };
 struct error_response {
     int status;
     std::meta::info body;
@@ -101,6 +102,7 @@ consteval error_response make_error_response(int status, std::meta::info body,
     [[=::rig::unauthorized{^^body, description}]]
 #define RIG_PUBLIC [[=::rig::public_operation{}]]
 #define RIG_HOST_RESPONSE(media_type) [[=::rig::host_response{media_type}]]
+#define RIG_SUCCESS_STATUS(status) [[=::rig::success_status{status}]]
 #define RIG_INTERNAL_ERROR(body, description) \
     [[=::rig::internal_error{^^body, description}]]
 #define RIG_ERROR_RESPONSE(status, body, description, ...) \
@@ -130,6 +132,7 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_UNAUTHORIZED(body, description)
 #define RIG_PUBLIC
 #define RIG_HOST_RESPONSE(media_type)
+#define RIG_SUCCESS_STATUS(status)
 #define RIG_INTERNAL_ERROR(body, description)
 #define RIG_ERROR_RESPONSE(status, body, description, ...)
 #endif

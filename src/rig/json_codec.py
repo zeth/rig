@@ -18,7 +18,8 @@ def generate(ir, api_header):
         if kind == "builtin":
             try:
                 return {"int": "int", "int64": "long long", "double": "double",
-                        "bool": "bool", "string": "std::string"}[ref["name"]]
+                        "bool": "bool", "string": "std::string",
+                        "object": "nlohmann::json"}[ref["name"]]
             except KeyError:
                 raise ValueError(f"unsupported builtin type: {ref['name']}") from None
         if kind == "named":
@@ -30,6 +31,8 @@ def generate(ir, api_header):
             inner = cpp_type(ref["items"] if kind == "array" else ref["value"])
             container = "vector" if kind == "array" else "optional"
             return f"std::{container}<{inner}>"
+        if kind == "map":
+            return f"std::map<std::string, {cpp_type(ref['values'])}>"
         raise ValueError(f"unsupported type kind: {kind}")
 
     lines = [
@@ -39,6 +42,7 @@ def generate(ir, api_header):
         "#include <nlohmann/json.hpp>",
         "#include <cstdint>",
         "#include <limits>",
+        "#include <map>",
         "#include <optional>",
         "#include <stdexcept>",
         "#include <string>",
@@ -92,6 +96,28 @@ def generate(ir, api_header):
         "    static std::string decode(const json& value) {",
         '        if (!value.is_string()) throw std::invalid_argument("expected string");',
         "        return value.get<std::string>();",
+        "    }",
+        "};",
+        "// A free-form JSON object: any members, but an object.",
+        "template <> struct codec<json> {",
+        "    static json encode(const json& value) {",
+        '        if (!value.is_object()) throw std::invalid_argument("expected object");',
+        "        return value;",
+        "    }",
+        "    static json decode(const json& value) { return encode(value); }",
+        "};",
+        "template <typename T> struct codec<std::map<std::string, T>> {",
+        "    static json encode(const std::map<std::string, T>& value) {",
+        "        json result = json::object();",
+        "        for (const auto& [key, item] : value) result[key] = codec<T>::encode(item);",
+        "        return result;",
+        "    }",
+        "    static std::map<std::string, T> decode(const json& value) {",
+        '        if (!value.is_object()) throw std::invalid_argument("expected object");',
+        "        std::map<std::string, T> result;",
+        "        for (auto it = value.begin(); it != value.end(); ++it)",
+        "            result.emplace(it.key(), codec<T>::decode(it.value()));",
+        "        return result;",
         "    }",
         "};",
         "template <typename T> struct codec<std::vector<T>> {",

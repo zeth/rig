@@ -388,6 +388,79 @@ class InspectorTests(unittest.TestCase):
             run = subprocess.run([binary], cwd=directory, capture_output=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_free_form_objects_maps_and_success_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <nlohmann/json.hpp>\n'
+                '#include <map>\n#include <optional>\n#include <string>\n#include <vector>\n'
+                'namespace sample {\n'
+                'struct Item {\n'
+                '  nlohmann::json context;\n'
+                '  std::optional<nlohmann::json> trace RIG_NULLABLE;\n'
+                '  std::map<std::string, std::vector<std::string>> metadata;\n'
+                '};\n'
+                'RIG_ROUTE(POST, "/items") RIG_SUCCESS_STATUS(201) Item create_item(Item item);\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            ir = json.loads(result.stdout)
+            self.assertEqual([entry["cpp_name"] for entry in ir["types"]], ["sample::Item"])
+            fields = ir["types"][0]["fields"]
+            self.assertEqual(fields[0]["type"], {"kind": "builtin", "name": "object"})
+            self.assertEqual(fields[2]["type"], {"kind": "map", "values": {
+                "kind": "array", "items": {"kind": "builtin", "name": "string"}}})
+            self.assertEqual(ir["operations"][0]["success_status"], 201)
+            for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
+                                          ("http-routes", "--codec-header", "routes.hpp")):
+                generated = subprocess.run(
+                    [sys.executable, "-m", "rig", command, flag,
+                     "api.hpp" if command == "json-codec" else "codec.hpp"],
+                    input=result.stdout, cwd=directory, text=True, capture_output=True,
+                )
+                self.assertEqual(generated.returncode, 0, generated.stderr)
+                (root / output).write_text(generated.stdout)
+            (root / "check.cpp").write_text(
+                '#include "routes.hpp"\n'
+                'sample::Item sample::create_item(Item item) { return item; }\n'
+                'int main() {\n'
+                '  auto created = rig_http::dispatch("POST", "/items",\n'
+                '      R"({"context":{"a":[1]},"trace":null,"metadata":{"k":["v"]}})");\n'
+                '  if (!created || created->status != 201) return 1;\n'
+                '  if (created->body["context"]["a"][0] != 1 || !created->body["trace"].is_null() ||\n'
+                '      created->body["metadata"]["k"][0] != "v") return 2;\n'
+                '  auto not_object = rig_http::dispatch("POST", "/items",\n'
+                '      R"({"context":[1],"trace":null,"metadata":{}})");\n'
+                '  if (!not_object || not_object->status != 400) return 3;\n'
+                '  auto bad_map = rig_http::dispatch("POST", "/items",\n'
+                '      R"({"context":{},"trace":null,"metadata":{"k":"v"}})");\n'
+                '  if (!bad_map || bad_map->status != 400) return 4;\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = root / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", "-Wall", "-Wextra", "-Werror", f"-I{include_dir}", "-I.",
+                 "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_ordered_json_is_not_a_free_form_object(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n#include <nlohmann/json.hpp>\n'
+                'namespace sample { struct Item { nlohmann::ordered_json context; };\n'
+                'RIG_ROUTE(GET, "/item") Item get_item(); }\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("unsupported", result.stderr)
+
     def test_error_responses_reject_shadowed_exception_types(self):
         cases = (
             'RIG_ERROR_RESPONSE(500, Error, "Failed", std::exception)\n'

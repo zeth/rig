@@ -10,6 +10,7 @@
 #include <meta>
 #include <array>
 #include <cstddef>
+#include <map>
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
@@ -36,6 +37,28 @@ consteval bool is_result_type(std::meta::info type) {
         std::meta::template_of(type) == ^^rig::result;
 }
 
+// nlohmann::json, recognised by shape so RIG needs no nlohmann header: a
+// basic_json specialisation in namespace nlohmann whose objects are std::map.
+consteval bool is_json_object_type(std::meta::info type) {
+    if (!std::meta::has_template_arguments(type)) return false;
+    const auto templ = std::meta::template_of(type);
+    if (!std::meta::has_identifier(templ) || std::meta::identifier_of(templ) != "basic_json")
+        return false;
+    bool in_nlohmann = false;
+    for (auto scope = std::meta::parent_of(templ); scope != ^^::;
+         scope = std::meta::parent_of(scope)) {
+        if (std::meta::has_identifier(scope) && std::meta::identifier_of(scope) == "nlohmann")
+            in_nlohmann = true;
+    }
+    return in_nlohmann && std::meta::template_arguments_of(type)[0] == ^^std::map;
+}
+
+consteval bool is_string_map_type(std::meta::info type) {
+    return std::meta::has_template_arguments(type) &&
+        std::meta::template_of(type) == ^^std::map &&
+        std::meta::is_same_type(std::meta::template_arguments_of(type)[0], ^^std::string);
+}
+
 consteval bool contains_type(const std::vector<std::meta::info>& types,
                              std::meta::info type) {
     for (auto existing : types) {
@@ -50,7 +73,12 @@ consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& 
         std::meta::is_same_type(type, ^^long long) ||
         std::meta::is_same_type(type, ^^double) ||
         std::meta::is_same_type(type, ^^bool) ||
-        std::meta::is_same_type(type, ^^std::string)) return;
+        std::meta::is_same_type(type, ^^std::string) ||
+        is_json_object_type(type)) return;
+    if (is_string_map_type(type)) {
+        collect_type(std::meta::template_arguments_of(type)[1], types);
+        return;
+    }
 
     if (is_result_type(type)) {
         const auto arguments = std::meta::template_arguments_of(type);
@@ -65,8 +93,9 @@ consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& 
         const auto templ = std::meta::template_of(type);
         if (templ == ^^std::vector || templ == ^^std::optional) {
             collect_type(std::meta::template_arguments_of(type)[0], types);
-            return;
         }
+        // Any other specialisation is emitted as unsupported, which validation rejects.
+        return;
     }
 
     if (!std::meta::is_enum_type(type) && !std::meta::is_class_type(type)) return;
@@ -216,6 +245,14 @@ void emit_type(std::ostream& output) {
         output << "{\"kind\":\"builtin\",\"name\":\"bool\"}";
     } else if constexpr (std::meta::is_same_type(type, ^^std::string)) {
         output << "{\"kind\":\"builtin\",\"name\":\"string\"}";
+    } else if constexpr (is_json_object_type(type)) {
+        output << "{\"kind\":\"builtin\",\"name\":\"object\"}";
+    } else if constexpr (is_string_map_type(type)) {
+        constexpr auto arguments = std::define_static_array(
+            std::meta::template_arguments_of(type));
+        output << "{\"kind\":\"map\",\"values\":";
+        emit_type<arguments[1]>(output);
+        output << '}';
     } else if constexpr (std::meta::has_template_arguments(type)) {
         constexpr auto templ = std::meta::template_of(type);
         if constexpr (templ == ^^std::vector || templ == ^^std::optional) {
@@ -541,6 +578,13 @@ void emit_operation(std::ostream& output) {
         constexpr auto value = [:std::meta::constant_of(host_responses[0]):];
         output << ",\"host_response\":";
         quoted(output, value.media_type);
+    }
+    constexpr auto success_statuses = std::define_static_array(
+        std::meta::annotations_of_with_type(Function, ^^rig::success_status));
+    static_assert(success_statuses.size() <= 1, "RIG operations need at most one success status");
+    if constexpr (success_statuses.size() == 1) {
+        constexpr auto value = [:std::meta::constant_of(success_statuses[0]):];
+        output << ",\"success_status\":" << value.status;
     }
     output << ",\"parameters\":[";
     bool first = true;

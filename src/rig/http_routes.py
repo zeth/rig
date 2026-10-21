@@ -21,7 +21,8 @@ def generate(ir, codec_header):
     def cpp_type(ref):
         if ref["kind"] == "builtin":
             return {"int": "int", "int64": "long long", "double": "double",
-                    "bool": "bool", "string": "std::string"}[ref["name"]]
+                    "bool": "bool", "string": "std::string",
+                    "object": "nlohmann::json"}[ref["name"]]
         if ref["kind"] == "named":
             name = ref["name"]
             if name not in names:
@@ -31,6 +32,8 @@ def generate(ir, codec_header):
             inner = cpp_type(ref["items"] if ref["kind"] == "array" else ref["value"])
             container = "vector" if ref["kind"] == "array" else "optional"
             return f"std::{container}<{inner}>"
+        if ref["kind"] == "map":
+            return f"std::map<std::string, {cpp_type(ref['values'])}>"
         raise ValueError(f"unsupported operation parameter type: {ref['kind']}")
 
     lines = [
@@ -263,21 +266,22 @@ def generate(ir, codec_header):
         call_arguments = [contexts[index] if index in contexts else next(supplied)
                           for index in range(len(arguments) + len(contexts))]
         call = f"{operation['cpp_name']}({', '.join(call_arguments)})"
+        success = operation.get("success_status", 200)
         if operation["result"]:
-            success = cpp_type(operation["returns"])
+            success_type = cpp_type(operation["returns"])
             invoke = [
                 f"        const auto outcome = {call};",
                 f'        return std::visit([](const auto& value) -> response {{',
                 "            using value_type = std::decay_t<decltype(value)>;",
-                f"            if constexpr (std::is_same_v<value_type, {success}>) {{",
-                f'                return {{200, rig_json::encode(value), "{name}"}};',
+                f"            if constexpr (std::is_same_v<value_type, {success_type}>) {{",
+                f'                return {{{success}, rig_json::encode(value), "{name}"}};',
                 "            } else {",
                 f'                return {{value_type::status, rig_json::encode(value.body), "{name}"}};',
                 "            }",
                 "        }, outcome.value());",
             ]
         else:
-            invoke = [f'        return response{{200, rig_json::encode({call}), "{name}"}};']
+            invoke = [f'        return response{{{success}, rig_json::encode({call}), "{name}"}};']
         mapped = [(error["status"], cpp_type(error["type"]), exception)
                   for error in operation.get("errors", [])
                   for exception in error.get("exceptions", [])]

@@ -148,9 +148,10 @@ unmarked parameter becomes a JSON request body;
 registered record fields are required; a successful operation returns
 HTTP 200 with a JSON body; and `rig::result<Success, rig::error<Status, Body>...>`
 declares operation errors. The generated HTTP dispatcher returns the chosen
-status and JSON body. The IR currently describes `int`, `bool`,
-`std::string`, registered records and enums, `std::vector<T>`, and
-`std::optional<T>`. Enums become JSON strings matching their C++ enumerator
+status and JSON body. The IR currently describes `int`, `long long`,
+`double`, `bool`, `std::string`, `nlohmann::json` objects, registered records
+and enums, `std::vector<T>`, `std::optional<T>`, and
+`std::map<std::string, T>`. Enums become JSON strings matching their C++ enumerator
 names. An optional field is always present and contains either a value or
 `null`. Unsupported types and ambiguous inputs fail loudly.
 The IR carries qualified C++ names for types and operations. OpenAPI uses short
@@ -196,6 +197,10 @@ operation that needs no token: it gets `security: []` and no 401. The host
 asks `rig_http::is_public(method, path)` before authenticating.
 `RIG_INTERNAL_ERROR(ErrorResponse, "Internal server error")` makes every
 operation turn an otherwise unmapped `std::exception` into a documented 500.
+
+A `nlohmann::json` field is a free-form JSON object, a
+`std::map<std::string, T>` field is an object of `T` values, and
+`RIG_SUCCESS_STATUS(201)` gives an operation a success status other than 200.
 
 `RIG_HOST_RESPONSE("text/event-stream")` declares an operation whose response
 the host writes, such as an event stream or a file download. RIG documents it

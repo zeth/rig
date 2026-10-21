@@ -11,6 +11,7 @@ PRIMITIVES = {
     "double": {"type": "number", "format": "double"},
     "bool": {"type": "boolean"},
     "string": {"type": "string"},
+    "object": {"type": "object", "additionalProperties": True},
 }
 
 
@@ -46,6 +47,8 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             raise ValueError(f"unregistered type: {name}")
         if kind == "array":
             return {"type": "array", "items": schema(type_ref["items"])}
+        if kind == "map":
+            return {"type": "object", "additionalProperties": schema(type_ref["values"])}
         if kind == "optional":
             return {"anyOf": [schema(type_ref["value"]), {"type": "null"}]}
         raise ValueError(f"unsupported type kind: {kind}")
@@ -176,7 +179,7 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             result["operationId"] = operation_names[operation["cpp_name"]]
         media_type = operation.get("host_response", "application/json")
         result["responses"] = {
-            "200": {
+            str(operation.get("success_status", 200)): {
                 "description": operation.get("response_description", "Success"),
                 "content": {media_type: {"schema": schema(operation["returns"])}}
             }

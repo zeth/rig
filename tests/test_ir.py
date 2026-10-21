@@ -195,6 +195,28 @@ class IRValidationTests(unittest.TestCase):
                          returns={"kind": "named", "name": "sample::Item"})
         self.assertIs(validate(self.ir), self.ir)
 
+    def test_success_status_is_a_2xx_with_a_body(self):
+        for status in (201, 202, 299):
+            self.ir["operations"][0]["success_status"] = status
+            self.assertIs(validate(self.ir), self.ir)
+        for status in (199, 204, 205, 300, "201", True):
+            with self.subTest(status=status):
+                document = copy.deepcopy(self.ir)
+                document["operations"][0]["success_status"] = status
+                with self.assertRaisesRegex(ValueError, "expected a 2xx status with a body"):
+                    validate(document)
+
+    def test_map_values_are_type_references(self):
+        field = self.ir["types"][0]["fields"][0]
+        field["type"] = {"kind": "map", "values": {"kind": "builtin", "name": "object"}}
+        self.assertIs(validate(self.ir), self.ir)
+        field["type"] = {"kind": "map", "values": {"kind": "named", "name": "Missing"}}
+        with self.assertRaisesRegex(ValueError, "unregistered type"):
+            validate(self.ir)
+        field["type"] = {"kind": "map"}
+        with self.assertRaisesRegex(ValueError, "missing values"):
+            validate(self.ir)
+
     def test_mapped_exceptions_are_unique_qualified_names(self):
         operation = self.ir["operations"][0]
         operation["errors"][0]["exceptions"] = ["sample::NotFound", "std::out_of_range"]
