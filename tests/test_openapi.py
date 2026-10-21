@@ -243,6 +243,38 @@ class ConversionTests(unittest.TestCase):
             "properties": {"secret": {"type": "string", "writeOnly": True}},
         })
 
+    def test_optional_values_use_null_types_and_references_use_any_of(self):
+        string = {"kind": "builtin", "name": "string"}
+        self.ir["types"][0]["fields"] += [
+            {"name": "label", "type": {"kind": "optional", "value": string}},
+            {"name": "parent", "type": {"kind": "optional", "value": {
+                "kind": "named", "name": "sample::Result"}}},
+            {"name": "heads", "type": {"kind": "map", "values": {
+                "kind": "optional", "value": string}}},
+        ]
+        properties = convert(self.ir)["components"]["schemas"]["Result"]["properties"]
+        self.assertEqual(properties["label"], {"type": ["string", "null"]})
+        self.assertEqual(properties["parent"], {"anyOf": [
+            {"$ref": "#/components/schemas/Result"}, {"type": "null"}]})
+        self.assertEqual(properties["heads"], {
+            "type": "object", "additionalProperties": {"type": ["string", "null"]}})
+
+    def test_host_responses_document_headers(self):
+        operation = self.ir["operations"][0]
+        operation.update(returns={"kind": "builtin", "name": "string"},
+                         host_response="application/octet-stream", response_format="binary",
+                         response_headers=[{"name": "Content-Disposition",
+                                            "description": "Attachment filename."}])
+        response = convert(self.ir)["paths"]["/results/{id}"]["get"]["responses"]["200"]
+        self.assertEqual(response["headers"], {"Content-Disposition": {
+            "description": "Attachment filename.", "schema": {"type": "string"}}})
+        self.assertEqual(response["content"], {"application/octet-stream": {
+            "schema": {"type": "string", "format": "binary"}}})
+        operation["response_headers"].append({"name": "content-disposition",
+                                              "description": "Again."})
+        with self.assertRaisesRegex(ValueError, "duplicate response header"):
+            convert(self.ir)
+
     def test_recursive_inline_record_is_rejected(self):
         self.ir["types"][0]["inline"] = True
         self.ir["types"][0]["fields"].append({

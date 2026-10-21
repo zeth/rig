@@ -658,6 +658,98 @@ class InspectorTests(unittest.TestCase):
             run = subprocess.run([binary], cwd=directory, capture_output=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_nullable_choices_records_and_host_response_details(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <optional>\n#include <string>\n'
+                'namespace sample {\n'
+                'struct RIG_API("Sample", "1.0") RIG_BEARER_AUTH("bearerAuth", "token") Service {};\n'
+                'struct Info { std::string name; };\n'
+                'struct RIG_MIN_PROPERTIES(1) Update {\n'
+                '  std::optional<std::optional<std::string>> mode RIG_OMIT_EMPTY RIG_NULLABLE\n'
+                '      RIG_STRING_VALUES("plain", "encrypted");\n'
+                '  std::optional<std::string> status RIG_NULLABLE RIG_STRING_VALUES("ok", "failed");\n'
+                '  std::optional<std::optional<Info>> info RIG_OMIT_EMPTY RIG_NULLABLE;\n'
+                '};\n'
+                'RIG_ROUTE(PATCH, "/update") Update apply(Update update);\n'
+                'RIG_ROUTE(GET, "/ping") RIG_PUBLIC RIG_HOST_RESPONSE("text/plain")\n'
+                '    RIG_STRING_VALUES("pong") std::string ping();\n'
+                'RIG_ROUTE(GET, "/blob") RIG_HOST_RESPONSE("application/octet-stream")\n'
+                '    RIG_FORMAT("binary") RIG_OPERATION_ID("download_blob") std::string blob();\n'
+                'RIG_ROUTE(POST, "/import") RIG_HOST_RESPONSE("application/json")\n'
+                '    RIG_RESPONSE_DESCRIPTION("Matched") RIG_SUCCESS_RESPONSE(201, "Created")\n'
+                '    Info import_info(Info info);\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            document = subprocess.run(
+                [sys.executable, "-m", "rig", "openapi", "--omit-operation-ids"],
+                input=result.stdout, cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(document.returncode, 0, document.stderr)
+            openapi = json.loads(document.stdout)
+            update = openapi["components"]["schemas"]["Update"]
+            self.assertEqual(update["minProperties"], 1)
+            self.assertEqual(update["required"], ["status"])
+            self.assertEqual(update["properties"]["mode"],
+                             {"type": ["string", "null"], "enum": ["plain", "encrypted", None]})
+            self.assertEqual(update["properties"]["info"], {"anyOf": [
+                {"$ref": "#/components/schemas/Info"}, {"type": "null"}]})
+            paths = openapi["paths"]
+            self.assertEqual(paths["/ping"]["get"]["responses"]["200"]["content"],
+                             {"text/plain": {"schema": {"type": "string", "enum": ["pong"]}}})
+            self.assertEqual(paths["/blob"]["get"]["operationId"], "download_blob")
+            self.assertNotIn("operationId", paths["/ping"]["get"])
+            self.assertEqual(
+                paths["/blob"]["get"]["responses"]["200"]["content"]["application/octet-stream"],
+                {"schema": {"type": "string", "format": "binary"}})
+            imported = paths["/import"]["post"]["responses"]
+            self.assertEqual((imported["200"]["description"], imported["201"]["description"]),
+                             ("Matched", "Created"))
+            self.assertEqual(imported["201"]["content"], imported["200"]["content"])
+            for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
+                                          ("http-routes", "--codec-header", "routes.hpp")):
+                generated = subprocess.run(
+                    [sys.executable, "-m", "rig", command, flag,
+                     "api.hpp" if command == "json-codec" else "codec.hpp"],
+                    input=result.stdout, cwd=directory, text=True, capture_output=True,
+                )
+                self.assertEqual(generated.returncode, 0, generated.stderr)
+                (root / output).write_text(generated.stdout)
+            (root / "check.cpp").write_text(
+                '#include "routes.hpp"\n'
+                'sample::Update sample::apply(Update update) { return update; }\n'
+                'int status(const char* body) {\n'
+                '  const auto response = rig_http::dispatch("PATCH", "/update", body);\n'
+                '  return response ? response->status : 0;\n'
+                '}\n'
+                'int main() {\n'
+                '  if (status(R"({"status":null})") != 200) return 1;\n'
+                '  if (status(R"({"status":"ok","mode":null,"info":null})") != 200) return 2;\n'
+                '  if (status(R"({"status":"ok","mode":"plain","info":{"name":"n"}})") != 200) return 3;\n'
+                '  if (status(R"({"status":"maybe"})") != 400) return 4;\n'
+                '  if (status(R"({"status":null,"mode":"open"})") != 400) return 5;\n'
+                '  if (status("{}") != 400) return 6;\n'
+                '  auto echoed = rig_http::dispatch("PATCH", "/update", R"({"status":null,"info":null})");\n'
+                '  if (!echoed->body.contains("info") || !echoed->body["info"].is_null() ||\n'
+                '      echoed->body.contains("mode")) return 7;\n'
+                '  if (rig_http::dispatch("GET", "/ping", "")) return 8;\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = root / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", "-Wall", "-Wextra", "-Werror", f"-I{include_dir}", "-I.",
+                 "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_ordered_json_is_not_a_free_form_object(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "api.hpp").write_text(

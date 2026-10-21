@@ -146,6 +146,20 @@ A GET never has a body.
 `RIG_DESCRIPTION(text)` on a record emits its `description`, which OpenAPI
 puts on the record's schema.
 
+`RIG_MIN_PROPERTIES(n)` on a record emits `min_properties`; OpenAPI documents
+`minProperties` and decoding rejects an object with fewer members, which suits
+partial updates that must change something.
+
+OpenAPI writes an optional value as its schema with `null` added to its
+`type`, as OpenAPI 3.1 does, and an optional reference as `anyOf` the
+reference and null.
+
+`RIG_NULLABLE` with `RIG_STRING_VALUES` gives a string that may also be null:
+OpenAPI adds `null` to the enum. `RIG_OMIT_EMPTY` with `RIG_NULLABLE` on
+`std::optional<std::optional<T>>` also accepts a record or array `T`, which
+OpenAPI documents as `anyOf` the type and null; a required nullable record is
+just a plain `std::optional`.
+
 `RIG_PATTERN(regex)` on a string field or parameter emits `pattern`, which
 OpenAPI documents and generated decoding enforces as an unanchored ECMAScript
 search, as JSON Schema does.
@@ -261,7 +275,20 @@ other than `application/json` requires a `std::string` return. Such an
 operation has no context parameters and maps no exceptions. Generated dispatch
 still ranks its route with the others and returns no match when it is selected,
 so a less specific generated route never takes its requests; `is_public`
-includes it. OpenAPI documents its success response with that media type, its
+includes it. A host-response operation can describe its response further:
+`RIG_STRING_VALUES(...)` on the operation emits `response_values`, the strings
+a string response may be; `RIG_FORMAT(name)` emits `response_format`, such as
+`binary`; and each `RIG_SUCCESS_RESPONSE(status, description)` emits an entry
+in `success_responses`, another 2xx status with the same body, for a host that
+chooses the status at run time.
+
+Each `RIG_RESPONSE_HEADER(name, description)` on a host-response operation
+emits an entry in `response_headers`, which OpenAPI documents as a string
+header on its success responses.
+
+`RIG_OPERATION_ID(name)` on any operation emits `operation_id`. OpenAPI uses it
+as the `operationId`, even with `--omit-operation-ids`, which then omits only
+the generated ones. OpenAPI documents its success response with that media type, its
 parameters, declared errors and the service 401, but not the generated 400 or
 500, because the generated dispatcher neither decodes nor calls it.
 

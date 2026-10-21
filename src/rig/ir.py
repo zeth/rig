@@ -10,6 +10,7 @@ METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
 PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z_0-9]*)\}\Z")
 LITERAL = re.compile(r"[A-Za-z0-9._~-]+\Z")
+HEADER = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*\Z")
 MEDIA_TYPE = re.compile(r"[a-z]+/[A-Za-z0-9][A-Za-z0-9.+-]*\Z")
 
 
@@ -228,7 +229,8 @@ def validate(document):
     for index, entry in enumerate(entries):
         location = f"$.types[{index}]"
         entry = _object(entry, location, ("kind", "name", "cpp_name"),
-                        ("fields", "values", "open", "inline", "description", "value", "base"))
+                        ("fields", "values", "open", "inline", "description", "value", "base",
+                         "min_properties"))
         kind = entry["kind"]
         if kind not in ("record", "enum"):
             raise ValueError(f"{location}: unsupported declaration kind: {kind!r}")
@@ -239,7 +241,12 @@ def validate(document):
         _unique(names, qualified, location, "type name")
         member_key = "fields" if kind == "record" else "values"
         _object(entry, location, ("kind", "name", "cpp_name", member_key),
-                ("open", "inline", "description", "value", "base") if kind == "record" else ())
+                ("open", "inline", "description", "value", "base", "min_properties")
+                if kind == "record" else ())
+        if "min_properties" in entry and (
+            type(entry["min_properties"]) is not int or entry["min_properties"] < 0
+        ):
+            raise ValueError(f"{location}.min_properties: expected a non-negative integer")
         if "description" in entry and (
             not isinstance(entry["description"], str) or not entry["description"]
         ):
@@ -280,10 +287,11 @@ def validate(document):
                     choices = _array(member["string_values"],
                                      f"{member_location}.string_values")
                     ref = member["type"]
-                    if member.get("omit_empty") and not member.get("nullable") and (
-                        isinstance(ref, dict) and ref.get("kind") == "optional"
-                    ):
-                        ref = ref.get("value")
+                    # Omittable and nullable fields wrap the string in one optional each.
+                    layers = int(bool(member.get("omit_empty"))) + int(bool(member.get("nullable")))
+                    for _ in range(layers):
+                        if isinstance(ref, dict) and ref.get("kind") == "optional":
+                            ref = ref.get("value")
                     if ref != {"kind": "builtin", "name": "string"}:
                         raise ValueError(f"{member_location}.string_values: requires a string field")
                     if not 1 <= len(choices) <= 16 or any(
@@ -315,7 +323,10 @@ def validate(document):
                         if not isinstance(inner, dict) or inner.get("kind") != "optional":
                             raise ValueError(f"{member_location}: omittable nullable requires nested optional")
                         inner = inner.get("value")
-                    if not isinstance(inner, dict) or inner.get("kind") != "builtin":
+                    if not isinstance(inner, dict) or (
+                        inner.get("kind") != "builtin" and "omit_empty" not in member
+                    ):
+                        # A required nullable record or array is just a plain optional.
                         raise ValueError(f"{member_location}.nullable: requires an optional builtin")
                 label = "field"
             else:
@@ -389,6 +400,7 @@ def validate(document):
         raise ValueError("$.service.unauthorized: requires bearer_auth")
 
     operation_names = set()
+    operation_ids = set()
     routes = {}
     for index, operation in enumerate(operations):
         location = f"$.operations[{index}]"
@@ -396,7 +408,8 @@ def validate(document):
             operation, location,
             ("name", "cpp_name", "method", "path", "parameters", "returns", "result"),
             ("errors", "summary", "description", "response_description", "context_parameters",
-             "public", "host_response", "success_status"),
+             "public", "host_response", "success_status", "operation_id", "response_values",
+             "response_format", "success_responses", "response_headers"),
         )
         if type(operation["result"]) is not bool:
             raise ValueError(f"{location}.result: expected boolean")
@@ -412,6 +425,48 @@ def validate(document):
                                  "requires a string return")
             if operation.get("context_parameters"):
                 raise ValueError(f"{location}: host-response operations have no context parameters")
+        if "operation_id" in operation:
+            _name(operation["operation_id"], f"{location}.operation_id")
+            _unique(operation_ids, operation["operation_id"], location, "operation ID")
+        returns_string = operation["returns"] == STRING
+        for key in ("response_values", "response_format", "success_responses", "response_headers"):
+            if key in operation and not host_served:
+                raise ValueError(f"{location}.{key}: requires host_response")
+        if "response_values" in operation:
+            values = _array(operation["response_values"], f"{location}.response_values")
+            if not returns_string or not values or any(
+                not isinstance(value, str) or not value for value in values
+            ) or len(set(values)) != len(values):
+                raise ValueError(f"{location}.response_values: expected unique strings "
+                                 "for a string response")
+        if "response_format" in operation:
+            if not returns_string or not isinstance(operation["response_format"], str) or (
+                not FORMAT.fullmatch(operation["response_format"])
+            ):
+                raise ValueError(f"{location}.response_format: expected a format for a string response")
+        header_names = set()
+        for index, header in enumerate(_array(operation.get("response_headers", []),
+                                              f"{location}.response_headers")):
+            header_location = f"{location}.response_headers[{index}]"
+            header = _object(header, header_location, ("name", "description"))
+            if not isinstance(header["name"], str) or not HEADER.fullmatch(header["name"]):
+                raise ValueError(f"{header_location}.name: expected an HTTP header name")
+            _unique(header_names, header["name"].lower(), header_location, "response header")
+            if not isinstance(header["description"], str) or not header["description"]:
+                raise ValueError(f"{header_location}.description: expected nonempty text")
+        extra_statuses = set()
+        for index, extra in enumerate(_array(operation.get("success_responses", []),
+                                             f"{location}.success_responses")):
+            extra_location = f"{location}.success_responses[{index}]"
+            extra = _object(extra, extra_location, ("status", "description"))
+            status = extra["status"]
+            if type(status) is not int or not 200 <= status <= 299 or status in (204, 205) or (
+                status == operation.get("success_status", 200)
+            ):
+                raise ValueError(f"{extra_location}.status: expected another 2xx status with a body")
+            _unique(extra_statuses, status, extra_location, "success status")
+            if not isinstance(extra["description"], str) or not extra["description"]:
+                raise ValueError(f"{extra_location}.description: expected nonempty text")
         if "success_status" in operation:
             status = operation["success_status"]
             # Every success response has a body, which 204 and 205 cannot.

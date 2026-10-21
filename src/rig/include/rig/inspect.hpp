@@ -348,6 +348,13 @@ void emit_record(std::ostream& output) {
     static_assert(inline_records.size() <= 1, "RIG records need at most one inline annotation");
     if constexpr (inline_records.size() == 1) output << ",\"inline\":true";
     if constexpr (annotation_count<Type, rig::value_type>() == 1) output << ",\"value\":true";
+    static_assert(annotation_count<Type, rig::min_properties>() <= 1,
+                  "RIG records need at most one minimum property count");
+    if constexpr (annotation_count<Type, rig::min_properties>() == 1) {
+        constexpr auto value = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Type, ^^rig::min_properties)[0]):];
+        output << ",\"min_properties\":" << value.value;
+    }
     constexpr auto bases = std::define_static_array(
         std::meta::bases_of(Type, std::meta::access_context::unprivileged()));
     static_assert(bases.size() <= 1, "RIG records extend at most one base record");
@@ -654,6 +661,63 @@ void emit_operation(std::ostream& output) {
         constexpr auto value = [:std::meta::constant_of(host_responses[0]):];
         output << ",\"host_response\":";
         quoted(output, value.media_type);
+    }
+    static_assert(annotation_count<Function, rig::operation_id>() <= 1,
+                  "RIG operations need at most one operation ID");
+    if constexpr (annotation_count<Function, rig::operation_id>() == 1) {
+        constexpr auto value = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Function, ^^rig::operation_id)[0]):];
+        output << ",\"operation_id\":";
+        quoted(output, value.text);
+    }
+    static_assert(annotation_count<Function, rig::string_values>() <= 1 &&
+                  annotation_count<Function, rig::format>() <= 1,
+                  "RIG operations need at most one response enum and format");
+    if constexpr (annotation_count<Function, rig::string_values>() == 1) {
+        constexpr auto values = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Function, ^^rig::string_values)[0]):];
+        output << ",\"response_values\":[";
+        for (int index = 0; index < values.count; ++index) {
+            if (index) output << ',';
+            quoted(output, values.values[index]);
+        }
+        output << ']';
+    }
+    if constexpr (annotation_count<Function, rig::format>() == 1) {
+        constexpr auto value = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Function, ^^rig::format)[0]):];
+        output << ",\"response_format\":";
+        quoted(output, value.text);
+    }
+    if constexpr (annotation_count<Function, rig::response_header>() > 0) {
+        output << ",\"response_headers\":[";
+        bool first_header = true;
+        template for (constexpr auto annotation : std::define_static_array(
+            std::meta::annotations_of_with_type(Function, ^^rig::response_header))) {
+            constexpr auto value = [:std::meta::constant_of(annotation):];
+            if (!first_header) output << ',';
+            first_header = false;
+            output << "{\"name\":";
+            quoted(output, value.name);
+            output << ",\"description\":";
+            quoted(output, value.description);
+            output << '}';
+        }
+        output << ']';
+    }
+    if constexpr (annotation_count<Function, rig::success_response>() > 0) {
+        output << ",\"success_responses\":[";
+        bool first_success = true;
+        template for (constexpr auto annotation : std::define_static_array(
+            std::meta::annotations_of_with_type(Function, ^^rig::success_response))) {
+            constexpr auto value = [:std::meta::constant_of(annotation):];
+            if (!first_success) output << ',';
+            first_success = false;
+            output << "{\"status\":" << value.status << ",\"description\":";
+            quoted(output, value.description);
+            output << '}';
+        }
+        output << ']';
     }
     constexpr auto success_statuses = std::define_static_array(
         std::meta::annotations_of_with_type(Function, ^^rig::success_status));

@@ -50,7 +50,12 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         if kind == "map":
             return {"type": "object", "additionalProperties": schema(type_ref["values"])}
         if kind == "optional":
-            return {"anyOf": [schema(type_ref["value"]), {"type": "null"}]}
+            # OpenAPI 3.1's idiom: a null type beside a typed schema, anyOf for a reference.
+            inner = schema(type_ref["value"])
+            if isinstance(inner.get("type"), str):
+                inner["type"] = [inner["type"], "null"]
+                return inner
+            return {"anyOf": [inner, {"type": "null"}]}
         raise ValueError(f"unsupported type kind: {kind}")
 
     def add_constraints(result, item):
@@ -88,12 +93,17 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             if field.get("omit_empty") and field.get("nullable"):
                 ref = ref["value"]
             property_schema = schema(ref)
-            if field.get("nullable"):
-                property_schema["type"] = [property_schema["type"], "null"]
             if "bool_value" in field:
                 property_schema["enum"] = [field["bool_value"]]
             if "string_values" in field:
-                property_schema["enum"] = field["string_values"]
+                property_schema["enum"] = list(field["string_values"])
+            if field.get("nullable"):
+                if "type" in property_schema:
+                    property_schema["type"] = [property_schema["type"], "null"]
+                    if "enum" in property_schema:
+                        property_schema["enum"].append(None)
+                else:
+                    property_schema = {"anyOf": [property_schema, {"type": "null"}]}
             if "description" in field and "$ref" in property_schema:
                 property_schema = {"allOf": [property_schema]}
             for key in ("description", "minimum"):
@@ -112,6 +122,8 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 result["description"] = entry["description"]
             return result
         result = {"type": "object", "properties": properties}
+        if "min_properties" in entry:
+            result["minProperties"] = entry["min_properties"]
         # An empty list means the same as none; OpenAPI documents usually omit it.
         if required:
             result["required"] = required
@@ -200,15 +212,33 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 bodies.append(parameter)
 
         result = {}
-        if include_operation_ids:
+        if "operation_id" in operation:
+            result["operationId"] = operation["operation_id"]
+        elif include_operation_ids:
             result["operationId"] = operation_names[operation["cpp_name"]]
         media_type = operation.get("host_response", "application/json")
+        success_schema = schema(operation["returns"])
+        if "response_values" in operation:
+            success_schema["enum"] = operation["response_values"]
+        if "response_format" in operation:
+            success_schema["format"] = operation["response_format"]
         result["responses"] = {
             str(operation.get("success_status", 200)): {
                 "description": operation.get("response_description", "Success"),
-                "content": {media_type: {"schema": schema(operation["returns"])}}
+                "content": {media_type: {"schema": success_schema}}
             }
         }
+        if "response_headers" in operation:
+            headers = {header["name"]: {"description": header["description"],
+                                        "schema": {"type": "string"}}
+                       for header in operation["response_headers"]}
+            for response in result["responses"].values():
+                response["headers"] = headers
+        for extra in operation.get("success_responses", []):
+            result["responses"][str(extra["status"])] = {
+                "description": extra["description"],
+                "content": {media_type: {"schema": dict(success_schema)}},
+            }
         for key in ("summary", "description"):
             if key in operation:
                 result[key] = operation[key]

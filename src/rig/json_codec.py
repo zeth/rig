@@ -219,11 +219,13 @@ def generate(ir, api_header):
                         f'throw std::invalid_argument("invalid {field_name}");'
                     )
                 if "string_values" in field:
-                    value = f'*value.{field_name}' if field.get("omit_empty") else f'value.{field_name}'
+                    # Each of omit_empty and nullable wraps the string in one optional.
+                    layers = int(bool(field.get("omit_empty"))) + int(bool(field.get("nullable")))
+                    value = "*" * layers + f"value.{field_name}"
                     invalid = " && ".join(
                         f'{value} != {json.dumps(choice)}' for choice in field["string_values"]
                     )
-                    present = f'value.{field_name} && ' if field.get("omit_empty") else ''
+                    present = "".join(f'{"*" * depth}value.{field_name} && ' for depth in range(layers))
                     lines.append(
                         f'    if ({present}{invalid}) '
                         f'throw std::invalid_argument("invalid {field_name}");'
@@ -253,6 +255,9 @@ def generate(ir, api_header):
             lines.append(f"    return {qualified}{{codec<{cpp_type(field['type'])}>::decode(value)}};")
         else:
             lines.append(f'    if (!value.is_object()) throw std::invalid_argument("expected {name}");')
+            if "min_properties" in entry:
+                lines.append(f'    if (value.size() < {entry["min_properties"]}) '
+                             f'throw std::invalid_argument("too few {name} fields");')
             for field in fields:
                 if not field.get("omit_empty") and "default" not in field:
                     lines.append(
@@ -278,9 +283,9 @@ def generate(ir, api_header):
                         f'value.at("{field_name}") != {json.dumps(choice)}'
                         for choice in field["string_values"]
                     )
-                    present = (f'value.contains("{field_name}") && '
-                               f'!value.at("{field_name}").is_null() && '
-                               if field.get("omit_empty") else '')
+                    present = (f'value.contains("{field_name}") && ' if field.get("omit_empty") else '') + (
+                        f'!value.at("{field_name}").is_null() && '
+                        if field.get("omit_empty") or field.get("nullable") else '')
                     lines.append(
                         f'    if ({present}{invalid}) '
                         f'throw std::invalid_argument("invalid {field_name}");'

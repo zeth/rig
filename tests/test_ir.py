@@ -265,6 +265,30 @@ class IRValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     validate(document)
 
+    def test_host_response_details_require_a_host_response(self):
+        string = {"kind": "builtin", "name": "string"}
+        operation = self.ir["operations"][0]
+        operation.update(returns=string, host_response="text/plain", response_values=["pong"],
+                         response_format="binary", operation_id="get_item",
+                         success_responses=[{"status": 201, "description": "Created"}])
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            (lambda op: op.pop("host_response"), "requires host_response"),
+            (lambda op: op.update(response_values=[]), "expected unique strings"),
+            (lambda op: op.update(response_format="Binary!"), "expected a format"),
+            (lambda op: op.update(operation_id="not valid"), "invalid C"),
+            (lambda op: op["success_responses"].append({"status": 200, "description": "Same"}),
+             "another 2xx status"),
+            (lambda op: op["success_responses"].append({"status": 204, "description": "Empty"}),
+             "another 2xx status"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                change(document["operations"][0])
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+
     def test_success_status_is_a_2xx_with_a_body(self):
         for status in (201, 202, 299):
             self.ir["operations"][0]["success_status"] = status
