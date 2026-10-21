@@ -81,11 +81,13 @@ class InspectorTests(unittest.TestCase):
                 'std::optional<std::string> label RIG_OMIT_EMPTY; '
                 'std::optional<std::string> error RIG_NULLABLE; '
                 'std::string state RIG_STRING_VALUES("live", "trashed"); };\n'
+                'struct RIG_INLINE_RECORD Detail { std::string name; };\n'
                 'RIG_ROUTE(GET, "/items/{id}") Item get_item(Context& context RIG_CONTEXT, int id);\n'
                 'RIG_ROUTE(GET, "/items") Item list_items(int limit RIG_QUERY RIG_RANGE(1, 20));\n'
                 'RIG_ROUTE(GET, "/choices") Item choices('
                 'std::optional<int> selected RIG_QUERY RIG_INT_VALUES(0, 1) '
                 'RIG_PARAMETER_DESCRIPTION("Choose zero or one"));\n'
+                'RIG_ROUTE(GET, "/detail") Detail get_detail();\n'
                 '}\n'
             )
             (root / "inspect.cpp").write_text(
@@ -119,6 +121,8 @@ class InspectorTests(unittest.TestCase):
             self.assertTrue(ir["types"][0]["fields"][4]["nullable"])
             self.assertEqual(ir["types"][0]["fields"][5]["string_values"],
                              ["live", "trashed"])
+            self.assertTrue(next(entry for entry in ir["types"]
+                                 if entry["name"] == "Detail")["inline"])
             generated = self.run_inspect(
                 root, "--header", "sample/api.hpp", "--namespace", "sample",
                 "--", "-Iinclude",

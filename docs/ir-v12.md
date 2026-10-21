@@ -141,6 +141,11 @@ decoding failures returned by generated dispatch; each response carries the
 matched operation's IR name so the host can apply its error policy. OpenAPI does not add a
 synthetic invalid-request response for these operations.
 
+`RIG_INLINE_RECORD` marks a C++ record whose OpenAPI object schema appears at
+each use site instead of in `components.schemas`. It does not change generated
+JSON codecs or C++ types. Combine it with `RIG_OPEN_RECORD` when the inline
+object permits additional properties in the control contract.
+
 `RIG_ERROR_RESPONSE(status, Body, "Description")` declares an additional
 HTTP error response supplied outside the function, such as by authentication
 middleware. RIG reflects the C++ body type and includes it among reachable

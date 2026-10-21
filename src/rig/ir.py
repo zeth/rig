@@ -189,7 +189,8 @@ def validate(document):
     names = set()
     for index, entry in enumerate(entries):
         location = f"$.types[{index}]"
-        entry = _object(entry, location, ("kind", "name", "cpp_name"), ("fields", "values", "open"))
+        entry = _object(entry, location, ("kind", "name", "cpp_name"),
+                        ("fields", "values", "open", "inline"))
         kind = entry["kind"]
         if kind not in ("record", "enum"):
             raise ValueError(f"{location}: unsupported declaration kind: {kind!r}")
@@ -200,9 +201,11 @@ def validate(document):
         _unique(names, qualified, location, "type name")
         member_key = "fields" if kind == "record" else "values"
         _object(entry, location, ("kind", "name", "cpp_name", member_key),
-                ("open",) if kind == "record" else ())
+                ("open", "inline") if kind == "record" else ())
         if "open" in entry and type(entry["open"]) is not bool:
             raise ValueError(f"{location}.open: expected boolean")
+        if "inline" in entry and type(entry["inline"]) is not bool:
+            raise ValueError(f"{location}.inline: expected boolean")
         members = _array(entry[member_key], f"{location}.{member_key}")
         member_names = set()
         for member_index, member in enumerate(members):

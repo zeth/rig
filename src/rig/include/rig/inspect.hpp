@@ -232,6 +232,10 @@ void emit_record(std::ostream& output) {
         std::meta::annotations_of_with_type(Type, ^^rig::open_record));
     static_assert(open.size() <= 1, "RIG records need at most one open-record annotation");
     if constexpr (open.size() == 1) output << ",\"open\":true";
+    constexpr auto inline_records = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::inline_record));
+    static_assert(inline_records.size() <= 1, "RIG records need at most one inline annotation");
+    if constexpr (inline_records.size() == 1) output << ",\"inline\":true";
     output << ",\"fields\":[";
     bool first = true;
     template for (constexpr auto field : std::define_static_array(

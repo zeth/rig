@@ -76,6 +76,30 @@ class ConversionTests(unittest.TestCase):
             "description": "Present when resolved.",
         })
 
+    def test_inline_record_appears_at_use_site(self):
+        self.ir["types"].append({
+            "kind": "record", "name": "Detail", "cpp_name": "sample::Detail",
+            "open": True, "inline": True,
+            "fields": [{"name": "name", "type": {"kind": "builtin", "name": "string"}}],
+        })
+        self.ir["types"][0]["fields"].append({
+            "name": "detail", "type": {"kind": "named", "name": "sample::Detail"},
+        })
+        document = convert(self.ir)
+        self.assertNotIn("Detail", document["components"]["schemas"])
+        self.assertEqual(document["components"]["schemas"]["Result"]["properties"]["detail"], {
+            "type": "object", "required": ["name"], "properties": {"name": {"type": "string"}},
+        })
+
+    def test_recursive_inline_record_is_rejected(self):
+        self.ir["types"][0]["inline"] = True
+        self.ir["types"][0]["fields"].append({
+            "name": "children", "type": {"kind": "array", "items": {
+                "kind": "named", "name": "sample::Result"}},
+        })
+        with self.assertRaisesRegex(ValueError, "recursive inline record"):
+            convert(self.ir)
+
     def test_external_context_is_not_an_http_parameter_or_generated_400(self):
         self.ir["operations"][0]["context_parameters"] = [
             {"name": "database", "position": 0}]

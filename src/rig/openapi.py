@@ -22,6 +22,7 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
     types = {entry["cpp_name"]: entry for entry in ir["types"]}
     schema_names = public_names(types)
     operation_names = public_names(operation["cpp_name"] for operation in ir["operations"])
+    inline_stack = set()
 
     def schema(type_ref):
         kind = type_ref["kind"]
@@ -33,6 +34,14 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         if kind == "named":
             name = type_ref["name"]
             if name in types:
+                if types[name].get("inline"):
+                    if name in inline_stack:
+                        raise ValueError(f"recursive inline record: {name}")
+                    inline_stack.add(name)
+                    try:
+                        return record_schema(types[name])
+                    finally:
+                        inline_stack.remove(name)
                 return {"$ref": f"#/components/schemas/{schema_names[name]}"}
             raise ValueError(f"unregistered type: {name}")
         if kind == "array":
@@ -53,41 +62,45 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             result["enum"] = parameter["int_values"]
         return result
 
+    def record_schema(entry):
+        properties = {}
+        required = []
+        for field in entry["fields"]:
+            ref = field["type"]
+            if field.get("omit_empty") or field.get("nullable"):
+                ref = ref["value"]
+            if field.get("omit_empty") and field.get("nullable"):
+                ref = ref["value"]
+            property_schema = schema(ref)
+            if field.get("nullable"):
+                property_schema["type"] = [property_schema["type"], "null"]
+            if "bool_value" in field:
+                property_schema["enum"] = [field["bool_value"]]
+            if "string_values" in field:
+                property_schema["enum"] = field["string_values"]
+            if "description" in field and "$ref" in property_schema:
+                property_schema = {"allOf": [property_schema]}
+            for key in ("description", "minimum"):
+                if key in field:
+                    property_schema[key] = field[key]
+            properties[field["name"]] = property_schema
+            if not field.get("omit_empty"):
+                required.append(field["name"])
+        result = {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+        }
+        if not entry.get("open", False):
+            result["additionalProperties"] = False
+        return result
+
     components = {}
     for qualified, entry in types.items():
         name = schema_names[qualified]
         if entry["kind"] == "record":
-            properties = {}
-            required = []
-            for field in entry["fields"]:
-                ref = field["type"]
-                if field.get("omit_empty") or field.get("nullable"):
-                    ref = ref["value"]
-                if field.get("omit_empty") and field.get("nullable"):
-                    ref = ref["value"]
-                property_schema = schema(ref)
-                if field.get("nullable"):
-                    property_schema["type"] = [property_schema["type"], "null"]
-                if "bool_value" in field:
-                    property_schema["enum"] = [field["bool_value"]]
-                if "string_values" in field:
-                    property_schema["enum"] = field["string_values"]
-                if "description" in field and "$ref" in property_schema:
-                    property_schema = {"allOf": [property_schema]}
-                for key in ("description", "minimum"):
-                    if key in field:
-                        property_schema[key] = field[key]
-                properties[field["name"]] = property_schema
-                if not field.get("omit_empty"):
-                    required.append(field["name"])
-            record_schema = {
-                "type": "object",
-                "properties": properties,
-                "required": required,
-            }
-            if not entry.get("open", False):
-                record_schema["additionalProperties"] = False
-            components[name] = record_schema
+            if not entry.get("inline"):
+                components[name] = record_schema(entry)
         elif entry["kind"] == "enum":
             components[name] = {"type": "string", "enum": entry["values"]}
         else:

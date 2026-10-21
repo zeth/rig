@@ -36,6 +36,20 @@ class IRValidationTests(unittest.TestCase):
     def test_valid_document_is_returned_unchanged(self):
         self.assertIs(validate(self.ir), self.ir)
 
+    def test_inline_is_a_record_boolean(self):
+        self.ir["types"][0]["inline"] = True
+        self.assertIs(validate(self.ir), self.ir)
+        self.ir["types"][0]["inline"] = "yes"
+        with self.assertRaisesRegex(ValueError, "inline: expected boolean"):
+            validate(self.ir)
+        self.ir["types"][0]["inline"] = True
+        self.ir["types"][1]["kind"] = "enum"
+        self.ir["types"][1]["values"] = ["one"]
+        self.ir["types"][1].pop("fields")
+        self.ir["types"][1]["inline"] = True
+        with self.assertRaisesRegex(ValueError, "unknown key inline"):
+            validate(self.ir)
+
     def test_integer_range_validation(self):
         parameter = self.ir["operations"][0]["parameters"][0]
         parameter["range"] = {"minimum": 1, "maximum": 20}
