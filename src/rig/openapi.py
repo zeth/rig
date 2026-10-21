@@ -55,7 +55,7 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
 
     def add_constraints(result, item):
         """Add format, length, choice and default keywords to a value schema."""
-        for key, keyword in (("format", "format"), ("min_length", "minLength"),
+        for key, keyword in (("format", "format"), ("pattern", "pattern"), ("min_length", "minLength"),
                              ("max_length", "maxLength"), ("default", "default")):
             if key in item:
                 result[keyword] = item[key]
@@ -105,14 +105,22 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             properties[field["name"]] = property_schema
             if not field.get("omit_empty") and "default" not in field:
                 required.append(field["name"])
+        if entry.get("value"):
+            # A value type is its one field on the wire.
+            result = properties[entry["fields"][0]["name"]]
+            if "description" in entry:
+                result["description"] = entry["description"]
+            return result
         result = {"type": "object", "properties": properties}
-        if "description" in entry:
-            result["description"] = entry["description"]
         # An empty list means the same as none; OpenAPI documents usually omit it.
         if required:
             result["required"] = required
         if not entry.get("open", False):
             result["additionalProperties"] = False
+        if "base" in entry:
+            result = {"allOf": [schema({"kind": "named", "name": entry["base"]}), result]}
+        if "description" in entry:
+            result["description"] = entry["description"]
         return result
 
     components = {}

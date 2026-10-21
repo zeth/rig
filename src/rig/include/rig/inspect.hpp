@@ -102,6 +102,9 @@ consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& 
     if (contains_type(types, type)) return;
     types.push_back(type);
     if (std::meta::is_class_type(type)) {
+        for (auto base : std::meta::bases_of(type, std::meta::access_context::unprivileged())) {
+            collect_type(std::meta::type_of(base), types);
+        }
         for (auto field : std::meta::nonstatic_data_members_of(
                  type, std::meta::access_context::unprivileged())) {
             collect_type(std::meta::type_of(field), types);
@@ -291,12 +294,19 @@ void emit_value_constraints(std::ostream& output) {
     static_assert(annotation_count<Entity, rig::format>() <= 1 &&
                   annotation_count<Entity, rig::min_length>() <= 1 &&
                   annotation_count<Entity, rig::max_length>() <= 1 &&
-                  annotation_count<Entity, rig::default_value>() <= 1,
+                  annotation_count<Entity, rig::default_value>() <= 1 &&
+                  annotation_count<Entity, rig::pattern>() <= 1,
                   "RIG values need at most one of each constraint");
     if constexpr (annotation_count<Entity, rig::format>() == 1) {
         constexpr auto value = [:std::meta::constant_of(
             std::meta::annotations_of_with_type(Entity, ^^rig::format)[0]):];
         output << ",\"format\":";
+        quoted(output, value.text);
+    }
+    if constexpr (annotation_count<Entity, rig::pattern>() == 1) {
+        constexpr auto value = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Entity, ^^rig::pattern)[0]):];
+        output << ",\"pattern\":";
         quoted(output, value.text);
     }
     if constexpr (annotation_count<Entity, rig::min_length>() == 1) {
@@ -337,6 +347,14 @@ void emit_record(std::ostream& output) {
         std::meta::annotations_of_with_type(Type, ^^rig::inline_record));
     static_assert(inline_records.size() <= 1, "RIG records need at most one inline annotation");
     if constexpr (inline_records.size() == 1) output << ",\"inline\":true";
+    if constexpr (annotation_count<Type, rig::value_type>() == 1) output << ",\"value\":true";
+    constexpr auto bases = std::define_static_array(
+        std::meta::bases_of(Type, std::meta::access_context::unprivileged()));
+    static_assert(bases.size() <= 1, "RIG records extend at most one base record");
+    if constexpr (bases.size() == 1) {
+        output << ",\"base\":";
+        quoted(output, qualified_name<std::meta::type_of(bases[0])>());
+    }
     constexpr auto descriptions = std::define_static_array(
         std::meta::annotations_of_with_type(Type, ^^rig::description));
     static_assert(descriptions.size() <= 1, "RIG records need at most one description");

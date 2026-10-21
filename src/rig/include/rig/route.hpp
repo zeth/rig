@@ -41,6 +41,8 @@ struct minimum { int value; };
 struct min_length { int value; };
 struct max_length { int value; };
 struct format { char text[32]; };
+struct pattern { char text[256]; };
+struct value_type {};
 // A bool, integer or string default, chosen by the make_default overload.
 struct default_value { int kind; long long integer; bool boolean; char text[256]; };
 consteval default_value make_default(bool value) { return {1, 0, value, {}}; }
@@ -104,6 +106,8 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_MIN_LENGTH(value) [[=::rig::min_length{value}]]
 #define RIG_MAX_LENGTH(value) [[=::rig::max_length{value}]]
 #define RIG_FORMAT(text) [[=::rig::format{text}]]
+#define RIG_PATTERN(text) [[=::rig::pattern{text}]]
+#define RIG_VALUE_TYPE [[=::rig::value_type{}]]
 #define RIG_DEFAULT(value) [[=::rig::make_default(value)]]
 #define RIG_FIELD_DESCRIPTION(text) [[=::rig::field_description{text}]]
 #define RIG_OMIT_EMPTY [[=::rig::omit_empty{}]]
@@ -141,6 +145,8 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_MIN_LENGTH(value)
 #define RIG_MAX_LENGTH(value)
 #define RIG_FORMAT(text)
+#define RIG_PATTERN(text)
+#define RIG_VALUE_TYPE
 #define RIG_DEFAULT(value)
 #define RIG_FIELD_DESCRIPTION(text)
 #define RIG_OMIT_EMPTY

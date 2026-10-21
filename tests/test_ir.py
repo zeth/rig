@@ -237,6 +237,34 @@ class IRValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "a defaulted field is not optional"):
             validate(self.ir)
 
+    def test_value_types_and_base_records(self):
+        string = {"kind": "builtin", "name": "string"}
+        value = {"kind": "record", "name": "Ref", "cpp_name": "sample::Ref", "value": True,
+                 "fields": [{"name": "value", "type": string, "pattern": "^[0-9a-f]+$"}]}
+        derived = {"kind": "record", "name": "Detail", "cpp_name": "sample::Detail",
+                   "base": "sample::Item", "fields": [{"name": "note", "type": string}]}
+        self.ir["types"] += [value, derived]
+        self.ir["operations"][0]["parameters"].append(
+            {"name": "at", "in": "query", "type": {"kind": "named", "name": "sample::Ref"}})
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            (lambda ir: ir["types"][2]["fields"].append({"name": "x", "type": string}),
+             "exactly one required field"),
+            (lambda ir: ir["types"][3].update(base="sample::Ref"), "expected a registered record"),
+            (lambda ir: ir["types"][3].update(base="sample::Missing"), "expected a registered record"),
+            (lambda ir: ir["types"][3]["fields"].append(
+                {"name": "id", "type": {"kind": "builtin", "name": "int"}}), "hides a base field"),
+            (lambda ir: ir["types"][0].update(base="sample::Detail"), "in a cycle"),
+            (lambda ir: ir["types"][2]["fields"][0].update(type={"kind": "builtin", "name": "int"}),
+             "pattern: requires a string"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                change(document)
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+
     def test_success_status_is_a_2xx_with_a_body(self):
         for status in (201, 202, 299):
             self.ir["operations"][0]["success_status"] = status

@@ -566,6 +566,98 @@ class InspectorTests(unittest.TestCase):
             run = subprocess.run([binary], cwd=directory, capture_output=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_value_types_inheritance_and_patterns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <map>\n#include <optional>\n#include <string>\n#include <vector>\n'
+                'namespace sample {\n'
+                'struct RIG_VALUE_TYPE RIG_DESCRIPTION("A commit ID or prefix.") Revision {\n'
+                '  std::string value RIG_MIN_LENGTH(4) RIG_MAX_LENGTH(8) RIG_PATTERN("^[0-9a-f]+$");\n'
+                '};\n'
+                'struct RIG_VALUE_TYPE RIG_DESCRIPTION("Labels.") Labels {\n'
+                '  std::map<std::string, std::vector<std::string>> value;\n'
+                '};\n'
+                'struct Item { std::string id; Labels labels; };\n'
+                'struct RIG_OPEN_RECORD DetailedItem : Item {\n'
+                '  std::optional<std::string> note RIG_OMIT_EMPTY RIG_PATTERN("^n");\n'
+                '};\n'
+                'RIG_ROUTE(GET, "/items") DetailedItem item_at(Revision at RIG_QUERY);\n'
+                'RIG_ROUTE(PUT, "/items") DetailedItem put_item(DetailedItem item);\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            ir = json.loads(result.stdout)
+            types = {entry["name"]: entry for entry in ir["types"]}
+            self.assertIs(types["Revision"]["value"], True)
+            self.assertEqual(types["DetailedItem"]["base"], "sample::Item")
+            self.assertEqual([field["name"] for field in types["DetailedItem"]["fields"]], ["note"])
+            document = subprocess.run(
+                [sys.executable, "-m", "rig", "openapi"], input=result.stdout, cwd=directory,
+                text=True, capture_output=True,
+            )
+            self.assertEqual(document.returncode, 0, document.stderr)
+            schemas = json.loads(document.stdout)["components"]["schemas"]
+            self.assertEqual(schemas["Revision"], {
+                "type": "string", "minLength": 4, "maxLength": 8, "pattern": "^[0-9a-f]+$",
+                "description": "A commit ID or prefix.",
+            })
+            self.assertEqual(schemas["Labels"], {
+                "type": "object", "description": "Labels.",
+                "additionalProperties": {"type": "array", "items": {"type": "string"}},
+            })
+            self.assertEqual(schemas["DetailedItem"], {"allOf": [
+                {"$ref": "#/components/schemas/Item"},
+                {"type": "object", "properties": {"note": {"type": "string", "pattern": "^n"}}},
+            ]})
+            self.assertEqual(schemas["Item"]["properties"]["labels"],
+                             {"$ref": "#/components/schemas/Labels"})
+            for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
+                                          ("http-routes", "--codec-header", "routes.hpp")):
+                generated = subprocess.run(
+                    [sys.executable, "-m", "rig", command, flag,
+                     "api.hpp" if command == "json-codec" else "codec.hpp"],
+                    input=result.stdout, cwd=directory, text=True, capture_output=True,
+                )
+                self.assertEqual(generated.returncode, 0, generated.stderr)
+                (root / output).write_text(generated.stdout)
+            (root / "check.cpp").write_text(
+                '#include "routes.hpp"\n'
+                'sample::DetailedItem sample::item_at(Revision at) {\n'
+                '  return {{at.value, {{{"k", {"v"}}}}}, std::nullopt};\n'
+                '}\n'
+                'sample::DetailedItem sample::put_item(DetailedItem item) { return item; }\n'
+                'int status(const char* method, const char* path, const char* body = "") {\n'
+                '  const auto response = rig_http::dispatch(method, path, body);\n'
+                '  return response ? response->status : 0;\n'
+                '}\n'
+                'int main() {\n'
+                '  auto found = rig_http::dispatch("GET", "/items?at=abc1", "");\n'
+                '  if (!found || found->status != 200 || found->body["id"] != "abc1" ||\n'
+                '      found->body["labels"]["k"][0] != "v" || found->body.contains("note")) return 1;\n'
+                '  if (status("GET", "/items?at=abc") != 400) return 2;\n'
+                '  if (status("GET", "/items?at=ABCD") != 400) return 3;\n'
+                '  auto put = rig_http::dispatch("PUT", "/items",\n'
+                '      R"({"id":"x","labels":{},"note":"nice"})");\n'
+                '  if (!put || put->status != 200 || put->body["note"] != "nice") return 4;\n'
+                '  if (status("PUT", "/items", R"({"id":"x","labels":{},"note":"bad"})") != 400) return 5;\n'
+                '  if (status("PUT", "/items", R"({"labels":{},"note":"nice"})") != 400) return 6;\n'
+                '  if (status("PUT", "/items", R"({"id":"x","labels":{},"extra":1})") != 400) return 7;\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = root / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", "-Wall", "-Wextra", "-Werror", f"-I{include_dir}", "-I.",
+                 "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_ordered_json_is_not_a_free_form_object(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "api.hpp").write_text(

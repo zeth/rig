@@ -207,6 +207,9 @@ as a secret. `RIG_FORMAT("uuid")`, `RIG_MIN_LENGTH(1)`, `RIG_MAX_LENGTH(40)`
 and `RIG_DEFAULT(50)` describe fields and parameters, and
 `RIG_STRING_VALUES(...)` restricts a parameter to listed strings. A
 `std::optional<T>` body parameter makes the request body optional.
+`RIG_PATTERN("^[0-9a-f]+$")` restricts a string. `RIG_VALUE_TYPE` on a
+one-field struct gives a named schema that is not an object, such as a
+constrained string, and a record that extends another becomes `allOf`.
 
 `RIG_HOST_RESPONSE("text/event-stream")` declares an operation whose response
 the host writes, such as an event stream or a file download. RIG documents it

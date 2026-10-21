@@ -84,6 +84,11 @@ def _value_constraints(item, ref, location):
             raise ValueError(f"{location}.format: expected a format name")
         if ref != STRING and ref not in INTEGERS:
             raise ValueError(f"{location}.format: requires a string or integer")
+    if "pattern" in item:
+        if not isinstance(item["pattern"], str) or not item["pattern"]:
+            raise ValueError(f"{location}.pattern: expected a regular expression")
+        if ref != STRING:
+            raise ValueError(f"{location}.pattern: requires a string")
     for key in ("min_length", "max_length"):
         if key in item:
             if type(item[key]) is not int or item[key] < 0:
@@ -223,7 +228,7 @@ def validate(document):
     for index, entry in enumerate(entries):
         location = f"$.types[{index}]"
         entry = _object(entry, location, ("kind", "name", "cpp_name"),
-                        ("fields", "values", "open", "inline", "description"))
+                        ("fields", "values", "open", "inline", "description", "value", "base"))
         kind = entry["kind"]
         if kind not in ("record", "enum"):
             raise ValueError(f"{location}: unsupported declaration kind: {kind!r}")
@@ -234,7 +239,7 @@ def validate(document):
         _unique(names, qualified, location, "type name")
         member_key = "fields" if kind == "record" else "values"
         _object(entry, location, ("kind", "name", "cpp_name", member_key),
-                ("open", "inline", "description") if kind == "record" else ())
+                ("open", "inline", "description", "value", "base") if kind == "record" else ())
         if "description" in entry and (
             not isinstance(entry["description"], str) or not entry["description"]
         ):
@@ -251,7 +256,7 @@ def validate(document):
                 member = _object(member, member_location, ("name", "type"),
                                  ("bool_value", "description", "minimum",
                                   "omit_empty", "nullable", "string_values", "write_only",
-                                  "format", "min_length", "max_length", "default"))
+                                  "format", "min_length", "max_length", "default", "pattern"))
                 member_name = _name(member["name"], f"{member_location}.name")
                 if "bool_value" in member:
                     if type(member["bool_value"]) is not bool or member["type"] != {
@@ -341,6 +346,38 @@ def validate(document):
         if entry["kind"] == "record":
             for member_index, field in enumerate(entry["fields"]):
                 type_ref(field["type"], f"$.types[{index}].fields[{member_index}].type")
+    records = {entry["cpp_name"]: entry for entry in entries if entry["kind"] == "record"}
+    for index, entry in enumerate(entries):
+        location = f"$.types[{index}]"
+        if entry.get("value") is not None:
+            if entry["value"] is not True:
+                raise ValueError(f"{location}.value: expected true")
+            if len(entry["fields"]) != 1 or entry["fields"][0].get("omit_empty") or (
+                "base" in entry or entry.get("inline")
+            ):
+                raise ValueError(f"{location}: a value type has exactly one required field "
+                                 "and no base")
+        if "base" in entry:
+            seen = {entry["cpp_name"]}
+            base = entry["base"]
+            while base is not None:
+                if base not in records or records[base].get("value"):
+                    raise ValueError(f"{location}.base: expected a registered record: {base}")
+                if base in seen:
+                    raise ValueError(f"{location}.base: records extend each other in a cycle")
+                seen.add(base)
+                inherited = {field["name"] for field in records[base]["fields"]}
+                for field in entry["fields"]:
+                    if field["name"] in inherited:
+                        raise ValueError(f"{location}: field {field['name']} hides a base field")
+                base = records[base].get("base")
+
+    def scalar(ref):
+        """The scalar a value type wraps, or the reference itself."""
+        if ref.get("kind") == "named" and records.get(ref["name"], {}).get("value"):
+            return records[ref["name"]]["fields"][0]["type"]
+        return ref
+
     for key in ("validation_error", "unauthorized", "internal_error"):
         if key in ir.get("service", {}):
             response = _object(ir["service"][key], f"$.service.{key}", ("type", "description"))
@@ -472,7 +509,7 @@ def validate(document):
             if "in" in parameter:
                 if parameter["in"] != "query":
                     raise ValueError(f"{parameter_location}.in: unsupported parameter location")
-                query_ref = query_value_type(parameter["type"])
+                query_ref = scalar(query_value_type(parameter["type"]))
                 if query_ref["kind"] != "builtin" or query_ref["name"] not in {
                     "int", "int64", "bool", "string"
                 }:

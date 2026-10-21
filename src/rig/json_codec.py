@@ -21,6 +21,34 @@ def generate(ir, api_header):
         raise ValueError("invalid API header path")
     entries = ir["types"]
     names = {entry["cpp_name"] for entry in entries}
+    records = {entry["cpp_name"]: entry for entry in entries if entry["kind"] == "record"}
+
+    def inherited_fields(entry):
+        """Field names from the record's base records, nearest first."""
+        result = []
+        base = entry.get("base")
+        while base is not None:
+            result += [field["name"] for field in records[base]["fields"]]
+            base = records[base].get("base")
+        return result
+
+    def value_checks(field, source):
+        """Length and pattern checks on a JSON string about to be decoded."""
+        checks = []
+        if "min_length" in field or "max_length" in field:
+            maximum = field.get("max_length", "std::numeric_limits<std::size_t>::max()")
+            checks += [
+                f"        const auto length = {source}.get_ref<const std::string&>().size();",
+                f'        if (length < {field.get("min_length", 0)} || length > {maximum})',
+                f'            throw std::invalid_argument("invalid length: {field["name"]}");',
+            ]
+        if "pattern" in field:
+            checks += [
+                f"        static const std::regex pattern({json.dumps(field['pattern'])});",
+                f"        if (!std::regex_search({source}.get_ref<const std::string&>(), pattern))",
+                f'            throw std::invalid_argument("invalid format: {field["name"]}");',
+            ]
+        return checks
 
     def cpp_type(ref):
         kind = ref["kind"]
@@ -52,6 +80,7 @@ def generate(ir, api_header):
         "#include <cstdint>",
         "#include <limits>",
         "#include <map>",
+        "#include <regex>",
         "#include <optional>",
         "#include <stdexcept>",
         "#include <string>",
@@ -173,9 +202,15 @@ def generate(ir, api_header):
             for value in values:
                 lines.append(f'    case {qualified}::{value}: return "{value}";')
             lines += ["    }", f'    throw std::invalid_argument("invalid {name}");']
+        elif entry.get("value"):
+            field = entry["fields"][0]
+            lines.append(f"    return codec<{cpp_type(field['type'])}>::encode(value.{field['name']});")
         else:
             fields = entry["fields"]
-            lines.append("    json result = json::object();")
+            if "base" in entry:
+                lines.append(f"    json result = codec<{entry['base']}>::encode(value);")
+            else:
+                lines.append("    json result = json::object();")
             for field in fields:
                 field_name = field["name"]
                 if "bool_value" in field:
@@ -210,6 +245,12 @@ def generate(ir, api_header):
             for value in values:
                 lines.append(f'    if (value == "{value}") return {qualified}::{value};')
             lines.append(f'    throw std::invalid_argument("unknown {name}");')
+        elif entry.get("value"):
+            field = entry["fields"][0]
+            checks = value_checks(field, "value")
+            if checks:
+                lines += ["    if (value.is_string()) {", *checks, "    }"]
+            lines.append(f"    return {qualified}{{codec<{cpp_type(field['type'])}>::decode(value)}};")
         else:
             lines.append(f'    if (!value.is_object()) throw std::invalid_argument("expected {name}");')
             for field in fields:
@@ -220,7 +261,8 @@ def generate(ir, api_header):
                     )
             if not entry.get("open", False):
                 allowed = " && ".join(
-                    f'it.key() != "{field["name"]}"' for field in fields
+                    f'it.key() != "{field_name}"'
+                    for field_name in [field["name"] for field in fields] + inherited_fields(entry)
                 ) or "true"
                 lines.append("    for (auto it = value.begin(); it != value.end(); ++it)")
                 lines.append(f'        if ({allowed}) throw std::invalid_argument("unexpected {name} field");')
@@ -244,17 +286,21 @@ def generate(ir, api_header):
                         f'throw std::invalid_argument("invalid {field_name}");'
                     )
             for field in fields:
-                if "min_length" in field or "max_length" in field:
+                checks = value_checks(field, f'value.at("{field["name"]}")')
+                if checks:
                     field_name = field["name"]
-                    maximum = field.get("max_length", "std::numeric_limits<std::size_t>::max()")
                     lines += [
                         f'    if (value.contains("{field_name}") && value.at("{field_name}").is_string()) {{',
-                        f'        const auto length = value.at("{field_name}").get_ref<const std::string&>().size();',
-                        f'        if (length < {field.get("min_length", 0)} || length > {maximum})',
-                        f'            throw std::invalid_argument("invalid length: {field_name}");',
+                        *checks,
                         "    }",
                     ]
+            if "base" in entry:
+                # The base decodes the members this record does not add.
+                lines.append("    json base = value;")
+                lines += [f'    base.erase("{field["name"]}");' for field in fields]
             lines.append(f"    return {qualified}{{")
+            if "base" in entry:
+                lines.append(f"        codec<{entry['base']}>::decode(base),")
             for field in fields:
                 decoded = f'codec<{cpp_type(field["type"])}>::decode(value.at("{field["name"]}"))'
                 if field.get("omit_empty") and field.get("nullable"):

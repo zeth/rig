@@ -18,6 +18,8 @@ def generate(ir, codec_header):
         raise ValueError("invalid codec header path")
 
     names = {entry["cpp_name"] for entry in ir["types"]}
+    value_types = {entry["cpp_name"]: entry["fields"][0]["type"] for entry in ir["types"]
+                   if entry.get("value")}
 
     def cpp_type(ref):
         if ref["kind"] == "builtin":
@@ -106,6 +108,14 @@ def generate(ir, codec_header):
         "inline void enforce_length(const std::optional<std::string>& value, std::size_t minimum,",
         "                           std::size_t maximum, const char* name) {",
         "    if (value) enforce_length(*value, minimum, maximum, name);",
+        "}",
+        "inline void enforce_pattern(const std::string& value, const std::regex& pattern, const char* name) {",
+        "    if (!std::regex_search(value, pattern))",
+        '        throw std::invalid_argument(std::string("invalid format: ") + name);',
+        "}",
+        "inline void enforce_pattern(const std::optional<std::string>& value, const std::regex& pattern,",
+        "                            const char* name) {",
+        "    if (value) enforce_pattern(*value, pattern, name);",
         "}",
         "inline int hex_digit(char character) {",
         "    if (character >= '0' && character <= '9') return character - '0';",
@@ -244,9 +254,15 @@ def generate(ir, codec_header):
                 decodes.append(
                     f'            const auto query_{position} = query_values.find("{param_name}");'
                 )
+                query_ref = query_value_type(parameter["type"])
+                wrapped = value_types.get(query_ref["name"]) if query_ref["kind"] == "named" else None
                 decoder = {"int": "decode_query_int", "long long": "decode_query_int64",
-                           "bool": "decode_query_bool", "std::string": "std::string"}[cpp_type(query_value_type(parameter["type"]))]
+                           "bool": "decode_query_bool", "std::string": "std::string"}[
+                    cpp_type(wrapped or query_ref)]
                 value = f"{decoder}(query_{position}->second)"
+                if wrapped:
+                    # The value type's codec applies its constraints.
+                    value = f"rig_json::decode<{query_ref['name']}>(json({value}))"
                 if parameter["type"]["kind"] == "optional":
                     decodes += [
                         f"            if (query_{position} == query_values.end())",
@@ -302,6 +318,11 @@ def generate(ir, codec_header):
                     f'            enforce_string_values(*argument_{position}, '
                     f'{{{values}}}, "{parameter["name"]}");'
                 )
+            if "pattern" in parameter:
+                decodes += [
+                    f"            static const std::regex pattern_{position}({json.dumps(parameter['pattern'])});",
+                    f'            enforce_pattern(*argument_{position}, pattern_{position}, "{parameter["name"]}");',
+                ]
             if "min_length" in parameter or "max_length" in parameter:
                 maximum = parameter.get("max_length", "std::numeric_limits<std::size_t>::max()")
                 decodes.append(

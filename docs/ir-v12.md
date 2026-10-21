@@ -146,6 +146,24 @@ A GET never has a body.
 `RIG_DESCRIPTION(text)` on a record emits its `description`, which OpenAPI
 puts on the record's schema.
 
+`RIG_PATTERN(regex)` on a string field or parameter emits `pattern`, which
+OpenAPI documents and generated decoding enforces as an unanchored ECMAScript
+search, as JSON Schema does.
+
+`RIG_VALUE_TYPE` on a record with exactly one required field emits
+`"value": true`. The record is its field on the wire, so a named schema need
+not be an object: a constrained string or a map, for example. OpenAPI emits
+the field's schema with its constraints and the record's description, and the
+codec encodes and decodes the field, checking its constraints. A value type
+whose field is a scalar can be a query parameter, decoded through the codec.
+
+A record with one base class emits `base`, the base record's qualified name,
+and lists only its own fields. OpenAPI emits `allOf` with a reference to the
+base and an object schema of the record's own fields. The codec encodes the
+base first, and decodes the base from the members the record does not add.
+Base records must be registered, non-value records, may not form a cycle, and
+may not share a field name with a record that extends them.
+
 `RIG_WRITE_ONLY` on a field emits `"write_only": true`, and OpenAPI marks the
 property `writeOnly`: clients send it, and responses never contain it. A record
 schema lists `required` only when some field is required. `RIG_MINIMUM(value)`
