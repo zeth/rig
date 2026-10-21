@@ -38,6 +38,22 @@ consteval string_values make_string_values(std::initializer_list<std::string_vie
 }
 struct parameter_description { char text[512]; };
 struct minimum { int value; };
+struct min_length { int value; };
+struct max_length { int value; };
+struct format { char text[32]; };
+// A bool, integer or string default, chosen by the make_default overload.
+struct default_value { int kind; long long integer; bool boolean; char text[256]; };
+consteval default_value make_default(bool value) { return {1, 0, value, {}}; }
+consteval default_value make_default(int value) { return {2, value, false, {}}; }
+consteval default_value make_default(long long value) { return {2, value, false, {}}; }
+consteval default_value make_default(const char* value) {
+    default_value result{3, 0, false, {}};
+    std::size_t length = 0;
+    while (value[length] != '\0') ++length;
+    if (length >= 256) throw "RIG string defaults must be shorter than 256 characters";
+    for (std::size_t index = 0; index < length; ++index) result.text[index] = value[index];
+    return result;
+}
 struct field_description { char text[256]; };
 struct omit_empty {};
 struct nullable {};
@@ -85,6 +101,10 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_STRING_VALUES(...) [[=::rig::make_string_values({__VA_ARGS__})]]
 #define RIG_PARAMETER_DESCRIPTION(text) [[=::rig::parameter_description{text}]]
 #define RIG_MINIMUM(value) [[=::rig::minimum{value}]]
+#define RIG_MIN_LENGTH(value) [[=::rig::min_length{value}]]
+#define RIG_MAX_LENGTH(value) [[=::rig::max_length{value}]]
+#define RIG_FORMAT(text) [[=::rig::format{text}]]
+#define RIG_DEFAULT(value) [[=::rig::make_default(value)]]
 #define RIG_FIELD_DESCRIPTION(text) [[=::rig::field_description{text}]]
 #define RIG_OMIT_EMPTY [[=::rig::omit_empty{}]]
 #define RIG_NULLABLE [[=::rig::nullable{}]]
@@ -118,6 +138,10 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_STRING_VALUES(...)
 #define RIG_PARAMETER_DESCRIPTION(text)
 #define RIG_MINIMUM(value)
+#define RIG_MIN_LENGTH(value)
+#define RIG_MAX_LENGTH(value)
+#define RIG_FORMAT(text)
+#define RIG_DEFAULT(value)
 #define RIG_FIELD_DESCRIPTION(text)
 #define RIG_OMIT_EMPTY
 #define RIG_NULLABLE

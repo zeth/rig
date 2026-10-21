@@ -279,6 +279,50 @@ void emit_type(std::ostream& output) {
     }
 }
 
+template <std::meta::info Entity, typename Annotation>
+consteval std::size_t annotation_count() {
+    return std::meta::annotations_of_with_type(Entity, ^^Annotation).size();
+}
+
+// Constraints a record field and an HTTP parameter share. IR validation checks
+// that each suits the entity's type.
+template <std::meta::info Entity>
+void emit_value_constraints(std::ostream& output) {
+    static_assert(annotation_count<Entity, rig::format>() <= 1 &&
+                  annotation_count<Entity, rig::min_length>() <= 1 &&
+                  annotation_count<Entity, rig::max_length>() <= 1 &&
+                  annotation_count<Entity, rig::default_value>() <= 1,
+                  "RIG values need at most one of each constraint");
+    if constexpr (annotation_count<Entity, rig::format>() == 1) {
+        constexpr auto value = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Entity, ^^rig::format)[0]):];
+        output << ",\"format\":";
+        quoted(output, value.text);
+    }
+    if constexpr (annotation_count<Entity, rig::min_length>() == 1) {
+        constexpr auto value = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Entity, ^^rig::min_length)[0]):];
+        output << ",\"min_length\":" << value.value;
+    }
+    if constexpr (annotation_count<Entity, rig::max_length>() == 1) {
+        constexpr auto value = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Entity, ^^rig::max_length)[0]):];
+        output << ",\"max_length\":" << value.value;
+    }
+    if constexpr (annotation_count<Entity, rig::default_value>() == 1) {
+        constexpr auto value = [:std::meta::constant_of(
+            std::meta::annotations_of_with_type(Entity, ^^rig::default_value)[0]):];
+        output << ",\"default\":";
+        if constexpr (value.kind == 1) {
+            output << (value.boolean ? "true" : "false");
+        } else if constexpr (value.kind == 2) {
+            output << value.integer;
+        } else {
+            quoted(output, value.text);
+        }
+    }
+}
+
 template <std::meta::info Type>
 void emit_record(std::ostream& output) {
     output << "{\"kind\":\"record\",\"name\":";
@@ -293,6 +337,14 @@ void emit_record(std::ostream& output) {
         std::meta::annotations_of_with_type(Type, ^^rig::inline_record));
     static_assert(inline_records.size() <= 1, "RIG records need at most one inline annotation");
     if constexpr (inline_records.size() == 1) output << ",\"inline\":true";
+    constexpr auto descriptions = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::description));
+    static_assert(descriptions.size() <= 1, "RIG records need at most one description");
+    if constexpr (descriptions.size() == 1) {
+        constexpr auto value = [:std::meta::constant_of(descriptions[0]):];
+        output << ",\"description\":";
+        quoted(output, value.text);
+    }
     output << ",\"fields\":[";
     bool first = true;
     template for (constexpr auto field : std::define_static_array(
@@ -342,6 +394,7 @@ void emit_record(std::ostream& output) {
             }
             output << ']';
         }
+        emit_value_constraints<field>(output);
         constexpr auto write_only = std::define_static_array(
             std::meta::annotations_of_with_type(field, ^^rig::write_only));
         static_assert(write_only.size() <= 1, "RIG fields need at most one write-only annotation");
@@ -633,6 +686,26 @@ void emit_operation(std::ostream& output) {
                 }
                 output << ']';
             }
+            constexpr auto string_choices = std::define_static_array(
+                std::meta::annotations_of_with_type(parameter, ^^rig::string_values));
+            static_assert(string_choices.size() <= 1, "RIG parameters need at most one string enum");
+            if constexpr (string_choices.size() == 1) {
+                constexpr auto values = [:std::meta::constant_of(string_choices[0]):];
+                output << ",\"string_values\":[";
+                for (int index = 0; index < values.count; ++index) {
+                    if (index) output << ',';
+                    quoted(output, values.values[index]);
+                }
+                output << ']';
+            }
+            constexpr auto minimums = std::define_static_array(
+                std::meta::annotations_of_with_type(parameter, ^^rig::minimum));
+            static_assert(minimums.size() <= 1, "RIG parameters need at most one minimum");
+            if constexpr (minimums.size() == 1) {
+                constexpr auto value = [:std::meta::constant_of(minimums[0]):];
+                output << ",\"minimum\":" << value.value;
+            }
+            emit_value_constraints<parameter>(output);
             constexpr auto parameter_descriptions = std::define_static_array(
                 std::meta::annotations_of_with_type(parameter, ^^rig::parameter_description));
             static_assert(parameter_descriptions.size() <= 1,

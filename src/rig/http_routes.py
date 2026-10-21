@@ -4,6 +4,7 @@ import json
 import re
 
 from .ir import identifier, query_value_type, route_pattern, route_priority, validate
+from .json_codec import cpp_literal
 
 
 def generate(ir, codec_header):
@@ -43,6 +44,7 @@ def generate(ir, codec_header):
         "#include <charconv>",
         "#include <exception>",
         "#include <initializer_list>",
+        "#include <limits>",
         "#include <map>",
         "#include <optional>",
         "#include <regex>",
@@ -86,6 +88,24 @@ def generate(ir, codec_header):
         "inline void enforce_int_values(const std::optional<int>& value,",
         "                               std::initializer_list<int> choices, const char* name) {",
         "    if (value) enforce_int_values(*value, choices, name);",
+        "}",
+        "inline void enforce_string_values(const std::string& value,",
+        "                                  std::initializer_list<std::string_view> choices, const char* name) {",
+        "    for (auto choice : choices) if (value == choice) return;",
+        '    throw std::invalid_argument(std::string("invalid value: ") + name);',
+        "}",
+        "inline void enforce_string_values(const std::optional<std::string>& value,",
+        "                                  std::initializer_list<std::string_view> choices, const char* name) {",
+        "    if (value) enforce_string_values(*value, choices, name);",
+        "}",
+        "inline void enforce_length(const std::string& value, std::size_t minimum, std::size_t maximum,",
+        "                           const char* name) {",
+        "    if (value.size() < minimum || value.size() > maximum)",
+        '        throw std::invalid_argument(std::string("invalid length: ") + name);',
+        "}",
+        "inline void enforce_length(const std::optional<std::string>& value, std::size_t minimum,",
+        "                           std::size_t maximum, const char* name) {",
+        "    if (value) enforce_length(*value, minimum, maximum, name);",
         "}",
         "inline int hex_digit(char character) {",
         "    if (character >= '0' && character <= '9') return character - '0';",
@@ -147,6 +167,13 @@ def generate(ir, codec_header):
         "}",
         "inline int decode_query_int(std::string_view input) {",
         '    return decode_int(input, "invalid integer query parameter");',
+        "}",
+        "inline long long decode_query_int64(std::string_view input) {",
+        "    long long value;",
+        "    const auto [end, error] = std::from_chars(input.data(), input.data() + input.size(), value);",
+        "    if (error != std::errc{} || end != input.data() + input.size())",
+        '        throw std::invalid_argument("invalid integer query parameter");',
+        "    return value;",
         "}",
         "inline bool decode_query_bool(std::string_view input) {",
         '    if (input == "true") return true;',
@@ -217,8 +244,8 @@ def generate(ir, codec_header):
                 decodes.append(
                     f'            const auto query_{position} = query_values.find("{param_name}");'
                 )
-                decoder = {"int": "decode_query_int", "bool": "decode_query_bool",
-                           "std::string": "std::string"}[cpp_type(query_value_type(parameter["type"]))]
+                decoder = {"int": "decode_query_int", "long long": "decode_query_int64",
+                           "bool": "decode_query_bool", "std::string": "std::string"}[cpp_type(query_value_type(parameter["type"]))]
                 value = f"{decoder}(query_{position}->second)"
                 if parameter["type"]["kind"] == "optional":
                     decodes += [
@@ -229,10 +256,24 @@ def generate(ir, codec_header):
                     ]
                     arguments.append(f"std::move(*argument_{position})")
                     continue
+                if "default" in parameter:
+                    decodes += [
+                        f"            if (query_{position} == query_values.end())",
+                        f"                argument_{position}.emplace({cpp_literal(parameter['default'])});",
+                        "            else",
+                        f"                argument_{position}.emplace({value});",
+                    ]
+                    arguments.append(f"std::move(*argument_{position})")
+                    continue
                 decodes += [
                     f"            if (query_{position} == query_values.end())",
                     f'                throw std::invalid_argument("missing query parameter: {param_name}");',
                 ]
+            elif parameter["type"]["kind"] == "optional":
+                # An optional body may be empty.
+                inner = cpp_type(parameter["type"]["value"])
+                value = (f"body.empty() ? {param_type}{{}} : "
+                         f"{param_type}(decode_body<{inner}>(body))")
             else:
                 value = f"decode_body<{param_type}>(body)"
             decodes.append(f"            argument_{position}.emplace({value});")
@@ -249,6 +290,23 @@ def generate(ir, codec_header):
                 decodes.append(
                     f'            enforce_int_values(*argument_{position}, '
                     f'{{{values}}}, "{parameter["name"]}");'
+                )
+            if "minimum" in parameter:
+                decodes.append(
+                    f'            enforce_range(*argument_{position}, {parameter["minimum"]}, '
+                    f'std::numeric_limits<int>::max(), "{parameter["name"]}");'
+                )
+            if "string_values" in parameter:
+                values = ", ".join(json.dumps(value) for value in parameter["string_values"])
+                decodes.append(
+                    f'            enforce_string_values(*argument_{position}, '
+                    f'{{{values}}}, "{parameter["name"]}");'
+                )
+            if "min_length" in parameter or "max_length" in parameter:
+                maximum = parameter.get("max_length", "std::numeric_limits<std::size_t>::max()")
+                decodes.append(
+                    f'            enforce_length(*argument_{position}, {parameter.get("min_length", 0)}, '
+                    f'{maximum}, "{parameter["name"]}");'
                 )
         if decodes:
             lines += [

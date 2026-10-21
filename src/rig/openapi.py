@@ -53,9 +53,22 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             return {"anyOf": [schema(type_ref["value"]), {"type": "null"}]}
         raise ValueError(f"unsupported type kind: {kind}")
 
+    def add_constraints(result, item):
+        """Add format, length, choice and default keywords to a value schema."""
+        for key, keyword in (("format", "format"), ("min_length", "minLength"),
+                             ("max_length", "maxLength"), ("default", "default")):
+            if key in item:
+                result[keyword] = item[key]
+        return result
+
     def parameter_schema(parameter, query=False):
         ref = query_value_type(parameter["type"]) if query else parameter["type"]
         result = schema(ref)
+        if "string_values" in parameter:
+            result["enum"] = parameter["string_values"]
+        if "minimum" in parameter:
+            result["minimum"] = parameter["minimum"]
+        add_constraints(result, parameter)
         if "range" in parameter:
             if ref["kind"] == "optional":
                 result["anyOf"][0].update(parameter["range"])
@@ -88,10 +101,13 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                     property_schema[key] = field[key]
             if field.get("write_only"):
                 property_schema["writeOnly"] = True
+            add_constraints(property_schema, field)
             properties[field["name"]] = property_schema
-            if not field.get("omit_empty"):
+            if not field.get("omit_empty") and "default" not in field:
                 required.append(field["name"])
         result = {"type": "object", "properties": properties}
+        if "description" in entry:
+            result["description"] = entry["description"]
         # An empty list means the same as none; OpenAPI documents usually omit it.
         if required:
             result["required"] = required
@@ -166,7 +182,7 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 item = {
                     "name": name,
                     "in": "query",
-                    "required": parameter["type"]["kind"] != "optional",
+                    "required": parameter["type"]["kind"] != "optional" and "default" not in parameter,
                     "schema": parameter_schema(parameter, query=True),
                 }
                 if "description" in parameter:
@@ -221,9 +237,12 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         if parameters:
             result["parameters"] = parameters
         if bodies:
+            body = bodies[0]
+            optional_body = body["type"]["kind"] == "optional"
+            body_schema = schema(body["type"]["value"]) if optional_body else parameter_schema(body)
             result["requestBody"] = {
-                "required": True,
-                "content": {"application/json": {"schema": parameter_schema(bodies[0])}}
+                "required": not optional_body,
+                "content": {"application/json": {"schema": body_schema}}
             }
         methods = paths.setdefault(path, {})
         methods[method] = result

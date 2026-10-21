@@ -6,6 +6,15 @@ import re
 from .ir import identifier, validate
 
 
+def cpp_literal(value):
+    """A C++ literal for a bool, integer or string default from the IR."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    return json.dumps(value)
+
+
 def generate(ir, api_header):
     validate(ir)
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", api_header):
@@ -204,7 +213,7 @@ def generate(ir, api_header):
         else:
             lines.append(f'    if (!value.is_object()) throw std::invalid_argument("expected {name}");')
             for field in fields:
-                if not field.get("omit_empty"):
+                if not field.get("omit_empty") and "default" not in field:
                     lines.append(
                         f'    if (!value.contains("{field["name"]}")) '
                         f'throw std::invalid_argument("missing {field["name"]}");'
@@ -234,6 +243,17 @@ def generate(ir, api_header):
                         f'    if ({present}{invalid}) '
                         f'throw std::invalid_argument("invalid {field_name}");'
                     )
+            for field in fields:
+                if "min_length" in field or "max_length" in field:
+                    field_name = field["name"]
+                    maximum = field.get("max_length", "std::numeric_limits<std::size_t>::max()")
+                    lines += [
+                        f'    if (value.contains("{field_name}") && value.at("{field_name}").is_string()) {{',
+                        f'        const auto length = value.at("{field_name}").get_ref<const std::string&>().size();',
+                        f'        if (length < {field.get("min_length", 0)} || length > {maximum})',
+                        f'            throw std::invalid_argument("invalid length: {field_name}");',
+                        "    }",
+                    ]
             lines.append(f"    return {qualified}{{")
             for field in fields:
                 decoded = f'codec<{cpp_type(field["type"])}>::decode(value.at("{field["name"]}"))'
@@ -243,6 +263,9 @@ def generate(ir, api_header):
                                f'codec<{inner_type}>::decode(value.at("{field["name"]}"))}}')
                 if field.get("omit_empty"):
                     decoded = f'value.contains("{field["name"]}") ? {decoded} : std::nullopt'
+                if "default" in field:
+                    fallback = f'{cpp_type(field["type"])}({cpp_literal(field["default"])})'
+                    decoded = f'value.contains("{field["name"]}") ? {decoded} : {fallback}'
                 lines.append(f'        {decoded},')
             lines.append("    };")
         lines += ["}", ""]

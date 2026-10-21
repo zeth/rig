@@ -72,6 +72,37 @@ def _unique(names, name, location, label):
     names.add(name)
 
 
+FORMAT = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+STRING = {"kind": "builtin", "name": "string"}
+INTEGERS = ({"kind": "builtin", "name": "int"}, {"kind": "builtin", "name": "int64"})
+
+
+def _value_constraints(item, ref, location):
+    """Check format, length and default against the scalar type they describe."""
+    if "format" in item:
+        if not isinstance(item["format"], str) or not FORMAT.fullmatch(item["format"]):
+            raise ValueError(f"{location}.format: expected a format name")
+        if ref != STRING and ref not in INTEGERS:
+            raise ValueError(f"{location}.format: requires a string or integer")
+    for key in ("min_length", "max_length"):
+        if key in item:
+            if type(item[key]) is not int or item[key] < 0:
+                raise ValueError(f"{location}.{key}: expected a non-negative integer")
+            if ref != STRING:
+                raise ValueError(f"{location}.{key}: requires a string")
+    if item.get("min_length", 0) > item.get("max_length", item.get("min_length", 0)):
+        raise ValueError(f"{location}: min_length exceeds max_length")
+    if "default" in item:
+        value = item["default"]
+        expected = {"bool": bool, "int": int, "int64": int, "string": str}.get(
+            ref.get("name") if ref.get("kind") == "builtin" else None)
+        if expected is None or type(value) is not expected:
+            raise ValueError(f"{location}.default: does not match the value type")
+        for choices in ("string_values", "int_values"):
+            if choices in item and value not in item[choices]:
+                raise ValueError(f"{location}.default: not one of the {choices}")
+
+
 def route_pattern(path, parameters):
     """Return the regex and capture positions for a supported HTTP route."""
     if not isinstance(path, str) or not path.startswith("/") or "//" in path or (
@@ -192,7 +223,7 @@ def validate(document):
     for index, entry in enumerate(entries):
         location = f"$.types[{index}]"
         entry = _object(entry, location, ("kind", "name", "cpp_name"),
-                        ("fields", "values", "open", "inline"))
+                        ("fields", "values", "open", "inline", "description"))
         kind = entry["kind"]
         if kind not in ("record", "enum"):
             raise ValueError(f"{location}: unsupported declaration kind: {kind!r}")
@@ -203,7 +234,11 @@ def validate(document):
         _unique(names, qualified, location, "type name")
         member_key = "fields" if kind == "record" else "values"
         _object(entry, location, ("kind", "name", "cpp_name", member_key),
-                ("open", "inline") if kind == "record" else ())
+                ("open", "inline", "description") if kind == "record" else ())
+        if "description" in entry and (
+            not isinstance(entry["description"], str) or not entry["description"]
+        ):
+            raise ValueError(f"{location}.description: expected nonempty text")
         if "open" in entry and type(entry["open"]) is not bool:
             raise ValueError(f"{location}.open: expected boolean")
         if "inline" in entry and type(entry["inline"]) is not bool:
@@ -215,7 +250,8 @@ def validate(document):
             if kind == "record":
                 member = _object(member, member_location, ("name", "type"),
                                  ("bool_value", "description", "minimum",
-                                  "omit_empty", "nullable", "string_values", "write_only"))
+                                  "omit_empty", "nullable", "string_values", "write_only",
+                                  "format", "min_length", "max_length", "default"))
                 member_name = _name(member["name"], f"{member_location}.name")
                 if "bool_value" in member:
                     if type(member["bool_value"]) is not bool or member["type"] != {
@@ -250,6 +286,15 @@ def validate(document):
                         for choice in choices
                     ) or len(set(choices)) != len(choices):
                         raise ValueError(f"{member_location}.string_values: expected unique nonempty strings")
+                value_ref = member["type"]
+                if member.get("omit_empty") and not member.get("nullable") and (
+                    isinstance(value_ref, dict) and value_ref.get("kind") == "optional"
+                ):
+                    value_ref = value_ref.get("value")
+                if isinstance(value_ref, dict):
+                    _value_constraints(member, value_ref, member_location)
+                if "default" in member and member.get("omit_empty"):
+                    raise ValueError(f"{member_location}.default: a defaulted field is not optional")
                 if "write_only" in member and member["write_only"] is not True:
                     raise ValueError(f"{member_location}.write_only: expected true")
                 for option in ("omit_empty", "nullable"):
@@ -370,7 +415,8 @@ def validate(document):
         for parameter_index, parameter in enumerate(parameters):
             parameter_location = f"{location}.parameters[{parameter_index}]"
             parameter = _object(parameter, parameter_location, ("name", "type"),
-                                ("in", "range", "int_values", "description"))
+                                ("in", "range", "int_values", "description", "string_values",
+                                 "minimum", "format", "min_length", "max_length", "default"))
             parameter_name = _name(parameter["name"], f"{parameter_location}.name")
             _unique(parameter_names, parameter_name, parameter_location, "parameter")
             if parameter_name in context_names:
@@ -403,12 +449,32 @@ def validate(document):
                 not isinstance(parameter["description"], str) or not parameter["description"]
             ):
                 raise ValueError(f"{parameter_location}.description: expected nonempty text")
+            value_ref = query_value_type(parameter["type"])
+            if "string_values" in parameter:
+                choices = _array(parameter["string_values"], f"{parameter_location}.string_values")
+                if not 1 <= len(choices) <= 16 or any(
+                    not isinstance(choice, str) or not choice for choice in choices
+                ) or len(set(choices)) != len(choices):
+                    raise ValueError(f"{parameter_location}.string_values: expected unique nonempty strings")
+                if value_ref != STRING:
+                    raise ValueError(f"{parameter_location}.string_values: requires a string")
+            if "minimum" in parameter:
+                if type(parameter["minimum"]) is not int or value_ref != INTEGERS[0]:
+                    raise ValueError(f"{parameter_location}.minimum: requires an int parameter")
+                if "range" in parameter or "int_values" in parameter:
+                    raise ValueError(f"{parameter_location}: minimum duplicates a range or int_values")
+            _value_constraints(parameter, value_ref, parameter_location)
+            if "default" in parameter and (
+                parameter.get("in") != "query" or parameter["type"]["kind"] == "optional"
+            ):
+                raise ValueError(f"{parameter_location}.default: requires a query parameter "
+                                 "whose type is not optional")
             if "in" in parameter:
                 if parameter["in"] != "query":
                     raise ValueError(f"{parameter_location}.in: unsupported parameter location")
                 query_ref = query_value_type(parameter["type"])
                 if query_ref["kind"] != "builtin" or query_ref["name"] not in {
-                    "int", "bool", "string"
+                    "int", "int64", "bool", "string"
                 }:
                     raise ValueError(f"{parameter_location}: query parameter must be scalar or optional scalar")
             by_name[parameter_name] = parameter
@@ -439,7 +505,7 @@ def validate(document):
         }
         if len(bodies) > 1:
             raise ValueError(f"{location}: operation {name} has multiple body parameters")
-        if bodies and method in ("GET", "DELETE"):
+        if bodies and method == "GET":
             raise ValueError(f"{location}: operation {name} has a body with {method}")
         if any(parameter["name"] in bodies and "description" in parameter
                for parameter in parameters):

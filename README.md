@@ -203,7 +203,10 @@ A `nlohmann::json` field is a free-form JSON object, a
 `std::map<std::string, T>` field is an object of `T` values, and
 `RIG_SUCCESS_STATUS(201)` gives an operation a success status other than 200.
 `RIG_WRITE_ONLY` marks a field clients send but responses never contain, such
-as a secret.
+as a secret. `RIG_FORMAT("uuid")`, `RIG_MIN_LENGTH(1)`, `RIG_MAX_LENGTH(40)`
+and `RIG_DEFAULT(50)` describe fields and parameters, and
+`RIG_STRING_VALUES(...)` restricts a parameter to listed strings. A
+`std::optional<T>` body parameter makes the request body optional.
 
 `RIG_HOST_RESPONSE("text/event-stream")` declares an operation whose response
 the host writes, such as an event stream or a file download. RIG documents it

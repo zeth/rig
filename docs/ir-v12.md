@@ -86,7 +86,7 @@ Paths start with `/` and contain literal segments or whole-segment `{name}`
 placeholders. Literals use ASCII letters, digits, `.`, `_`, `~`, and `-`.
 A placeholder must name exactly one parameter of type `int` or `string`.
 Parameters annotated `RIG_QUERY` after their C++ name have `"in": "query"`
-in IR. Query parameters support scalar `int`, `bool`, and `std::string` values.
+in IR. Query parameters support scalar `int`, `long long`, `bool`, and `std::string` values.
 An `int` or `std::optional<int>` parameter can also carry
 `RIG_RANGE(minimum, maximum)` after its name. Both bounds are inclusive
 integer constants, with minimum no greater than maximum. The inspector emits
@@ -104,8 +104,7 @@ An omitted optional value passes without a range check.
 `std::nullopt`, and OpenAPI sets `required` to false with the scalar schema.
 Other parameters form the JSON request body; at most one is allowed. For
 example, `list_items(std::optional<int> limit RIG_QUERY)` accepts both `/items`
-and `/items?limit=10`. `GET` and `DELETE` cannot have a body under the current
-convention.
+and `/items?limit=10`. `GET` cannot have a body.
 These rules are shared by OpenAPI and the C++20 HTTP dispatch generator.
 For the same method, literal segments take precedence over placeholders, and
 integer placeholders take precedence over string placeholders. Parameterized
@@ -125,6 +124,27 @@ optional controls omission and the inner optional controls `null`. Successful
 operations have a JSON response with HTTP 200, or with the status from
 `RIG_SUCCESS_STATUS(status)`, emitted as `success_status`: a 2xx status other
 than 204 or 205, since every success response has a body.
+
+Fields and HTTP parameters share four constraints. `RIG_FORMAT(name)` emits
+`format` on a string or integer, such as `uuid`, `date` or `int32`; OpenAPI
+documents it and generated code does not yet enforce it. `RIG_MIN_LENGTH(n)`
+and `RIG_MAX_LENGTH(n)` emit `min_length` and `max_length` on a string, which
+OpenAPI documents as `minLength` and `maxLength` and generated decoding
+enforces with HTTP 400. `RIG_DEFAULT(value)` emits `default`, a boolean,
+integer or string matching the value type. A defaulted field is not optional
+in C++ but is not required in JSON: decoding fills in the default. A
+defaulted query parameter likewise has a non-optional C++ type, is not
+required in OpenAPI, and receives the default when the request omits it.
+`RIG_STRING_VALUES(...)` on a string path or query parameter emits
+`string_values`, and `RIG_MINIMUM(value)` on an `int` parameter emits a
+one-sided `minimum`; both are enforced like `RIG_RANGE` and `RIG_INT_VALUES`.
+
+A body parameter of type `std::optional<T>` makes the request body optional:
+OpenAPI sets `required: false`, and an empty body decodes to `std::nullopt`.
+A GET never has a body.
+
+`RIG_DESCRIPTION(text)` on a record emits its `description`, which OpenAPI
+puts on the record's schema.
 
 `RIG_WRITE_ONLY` on a field emits `"write_only": true`, and OpenAPI marks the
 property `writeOnly`: clients send it, and responses never contain it. A record

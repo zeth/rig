@@ -452,6 +452,120 @@ class InspectorTests(unittest.TestCase):
             run = subprocess.run([binary], cwd=directory, capture_output=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_formats_lengths_defaults_choices_and_optional_bodies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "api.hpp").write_text(
+                '#include <rig/route.hpp>\n'
+                '#include <optional>\n#include <string>\n'
+                'namespace sample {\n'
+                'struct RIG_DESCRIPTION("A label on items.") Tag {\n'
+                '  std::string id RIG_FORMAT("uuid");\n'
+                '  std::string name RIG_MIN_LENGTH(1) RIG_MAX_LENGTH(8);\n'
+                '  bool pinned RIG_DEFAULT(false);\n'
+                '};\n'
+                'RIG_ROUTE(GET, "/tags") Tag list_tags(\n'
+                '    int limit RIG_QUERY RIG_RANGE(1, 50) RIG_DEFAULT(20),\n'
+                '    std::string order RIG_QUERY RIG_STRING_VALUES("name", "recent") RIG_DEFAULT("name"),\n'
+                '    std::optional<int> offset RIG_QUERY RIG_MINIMUM(0) RIG_FORMAT("int32"),\n'
+                '    std::optional<std::string> prefix RIG_QUERY RIG_MIN_LENGTH(1));\n'
+                'RIG_ROUTE(GET, "/tags/since") Tag tags_since(long long after RIG_QUERY);\n'
+                'RIG_ROUTE(DELETE, "/tags/{name}") Tag delete_tag(std::string name,\n'
+                '                                                 std::optional<Tag> replacement);\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            ir = json.loads(result.stdout)
+            fields = ir["types"][0]["fields"]
+            self.assertEqual(fields[0]["format"], "uuid")
+            self.assertEqual((fields[1]["min_length"], fields[1]["max_length"]), (1, 8))
+            self.assertIs(fields[2]["default"], False)
+            limit, order, offset, prefix = ir["operations"][0]["parameters"]
+            self.assertEqual(limit["default"], 20)
+            self.assertEqual((order["string_values"], order["default"]), (["name", "recent"], "name"))
+            self.assertEqual((offset["minimum"], offset["format"]), (0, "int32"))
+            self.assertEqual(prefix["min_length"], 1)
+            document = subprocess.run(
+                [sys.executable, "-m", "rig", "openapi"], input=result.stdout, cwd=directory,
+                text=True, capture_output=True,
+            )
+            self.assertEqual(document.returncode, 0, document.stderr)
+            openapi = json.loads(document.stdout)
+            tag = openapi["components"]["schemas"]["Tag"]
+            self.assertEqual(tag["description"], "A label on items.")
+            self.assertEqual(openapi["paths"]["/tags/since"]["get"]["parameters"][0]["schema"],
+                             {"type": "integer", "format": "int64"})
+            self.assertEqual(tag["required"], ["id", "name"])
+            self.assertEqual(tag["properties"]["pinned"], {"type": "boolean", "default": False})
+            self.assertEqual(tag["properties"]["name"],
+                             {"type": "string", "minLength": 1, "maxLength": 8})
+            query = openapi["paths"]["/tags"]["get"]["parameters"]
+            self.assertEqual(query[0], {"name": "limit", "in": "query", "required": False,
+                                        "schema": {"type": "integer", "minimum": 1,
+                                                   "maximum": 50, "default": 20}})
+            self.assertEqual(query[1]["schema"], {"type": "string", "enum": ["name", "recent"],
+                                                  "default": "name"})
+            self.assertEqual(query[2]["schema"],
+                             {"type": "integer", "minimum": 0, "format": "int32"})
+            self.assertIs(openapi["paths"]["/tags/{name}"]["delete"]["requestBody"]["required"],
+                          False)
+            for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
+                                          ("http-routes", "--codec-header", "routes.hpp")):
+                generated = subprocess.run(
+                    [sys.executable, "-m", "rig", command, flag,
+                     "api.hpp" if command == "json-codec" else "codec.hpp"],
+                    input=result.stdout, cwd=directory, text=True, capture_output=True,
+                )
+                self.assertEqual(generated.returncode, 0, generated.stderr)
+                (root / output).write_text(generated.stdout)
+            (root / "check.cpp").write_text(
+                '#include "routes.hpp"\n'
+                'sample::Tag sample::list_tags(int limit, std::string order, std::optional<int> offset,\n'
+                '                              std::optional<std::string>) {\n'
+                '  return {std::to_string(offset.value_or(-1)), order, limit == 20};\n'
+                '}\n'
+                'sample::Tag sample::tags_since(long long after) { return {std::to_string(after), "", false}; }\n'
+                'sample::Tag sample::delete_tag(std::string name, std::optional<Tag> replacement) {\n'
+                '  return replacement ? *replacement : Tag{"none", name, false};\n'
+                '}\n'
+                'int status(const char* method, const char* path, const char* body = "") {\n'
+                '  const auto response = rig_http::dispatch(method, path, body);\n'
+                '  return response ? response->status : 0;\n'
+                '}\n'
+                'int main() {\n'
+                '  auto defaults = rig_http::dispatch("GET", "/tags", "");\n'
+                '  if (!defaults || defaults->body["name"] != "name" || defaults->body["pinned"] != true ||\n'
+                '      defaults->body["id"] != "-1") return 1;\n'
+                '  if (status("GET", "/tags?order=recent&offset=0&limit=50") != 200) return 2;\n'
+                '  if (status("GET", "/tags?order=size") != 400) return 3;\n'
+                '  if (status("GET", "/tags?offset=-1") != 400) return 4;\n'
+                '  if (status("GET", "/tags?prefix=") != 400) return 5;\n'
+                '  if (status("GET", "/tags?limit=51") != 400) return 6;\n'
+                '  auto empty = rig_http::dispatch("DELETE", "/tags/old", "");\n'
+                '  if (!empty || empty->body["id"] != "none") return 7;\n'
+                '  auto replaced = rig_http::dispatch("DELETE", "/tags/old", R"({"id":"u","name":"new"})");\n'
+                '  if (!replaced || replaced->body["name"] != "new" || replaced->body["pinned"] != false)\n'
+                '    return 8;\n'
+                '  if (status("DELETE", "/tags/old", R"({"id":"u","name":""})") != 400) return 9;\n'
+                '  if (status("DELETE", "/tags/old", R"({"id":"u","name":"far too long"})") != 400)\n'
+                '    return 10;\n'
+                '  auto since = rig_http::dispatch("GET", "/tags/since?after=9000000000", "");\n'
+                '  if (!since || since->body["id"] != "9000000000") return 11;\n'
+                '  if (status("GET", "/tags/since?after=soon") != 400) return 12;\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = root / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", "-Wall", "-Wextra", "-Werror", f"-I{include_dir}", "-I.",
+                 "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_ordered_json_is_not_a_free_form_object(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "api.hpp").write_text(

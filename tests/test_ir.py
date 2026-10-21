@@ -207,6 +207,36 @@ class IRValidationTests(unittest.TestCase):
         self.assertEqual(convert(self.ir)["components"]["schemas"]["Item"]["properties"]["id"],
                          {"type": "integer", "minimum": 0})
 
+    def test_value_constraints_must_suit_their_types(self):
+        integer = {"kind": "builtin", "name": "int"}
+        string = {"kind": "builtin", "name": "string"}
+        operation = self.ir["operations"][0]
+        operation["parameters"].append({"name": "q", "in": "query", "type": string})
+        cases = (
+            ({"format": "Not A Format"}, string, "expected a format name"),
+            ({"min_length": 1}, integer, "requires a string"),
+            ({"min_length": 5, "max_length": 2}, string, "min_length exceeds max_length"),
+            ({"default": 3}, string, "does not match the value type"),
+            ({"default": True}, integer, "does not match the value type"),
+            ({"string_values": ["a"], "default": "b"}, string, "not one of the string_values"),
+            ({"string_values": ["a"]}, integer, "requires a string"),
+            ({"minimum": 0}, string, "requires an int parameter"),
+            ({"minimum": 0, "range": {"minimum": 0, "maximum": 1}}, integer,
+             "duplicates a range"),
+            ({"default": "x"}, {"kind": "optional", "value": string},
+             "whose type is not optional"),
+        )
+        for extra, ref, message in cases:
+            with self.subTest(message=message, extra=extra):
+                document = copy.deepcopy(self.ir)
+                document["operations"][0]["parameters"][1].update(extra, type=ref)
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+        field = self.ir["types"][0]["fields"][0]
+        field.update(type={"kind": "optional", "value": integer}, omit_empty=True, default=1)
+        with self.assertRaisesRegex(ValueError, "a defaulted field is not optional"):
+            validate(self.ir)
+
     def test_success_status_is_a_2xx_with_a_body(self):
         for status in (201, 202, 299):
             self.ir["operations"][0]["success_status"] = status
