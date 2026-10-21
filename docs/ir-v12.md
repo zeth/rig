@@ -172,11 +172,21 @@ default.
 discovery. Repeated `RIG_SERVER(url)` annotations list the advertised server
 URLs, and one `RIG_BEARER_AUTH(name, format)` declares a global HTTP bearer
 scheme. The inspector emits these as a `service` object with `title`,
-`version`, `servers`, and optional `bearer_auth` and `validation_error`. OpenAPI uses them for `info`,
+`version`, `servers`, and optional `bearer_auth`, `validation_error`, and
+`unauthorized`. OpenAPI uses them for `info`,
 `servers`, `components.securitySchemes`, and global `security`. Without a
 service declaration, `rig openapi` continues to use its title and version
 arguments and emits no servers or security scheme. A namespace registration
 can discover at most one service declaration.
+
+`RIG_UNAUTHORIZED(Body, description)` on a service with bearer auth emits
+`service.unauthorized` with the body's `type` and nonempty `description`, and
+registers the body type. OpenAPI then documents a 401 response with that body
+on every operation except those marked `RIG_PUBLIC`. Such an operation cannot
+also declare its own 401. `RIG_PUBLIC` on an operation emits `"public": true`,
+requires service bearer auth, and produces `security: []` in OpenAPI. Both
+annotations are documentation: the hosting server still authenticates requests
+before calling the generated dispatcher.
 
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
 The IR shape is unchanged: `returns` describes the success body, and `errors`

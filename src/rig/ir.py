@@ -172,7 +172,7 @@ def validate(document):
     operations = _array(ir["operations"], "$.operations")
     if "service" in ir:
         service = _object(ir["service"], "$.service", ("title", "version", "servers"),
-                          ("bearer_auth", "validation_error"))
+                          ("bearer_auth", "validation_error", "unauthorized"))
         for key in ("title", "version"):
             if not isinstance(service[key], str) or not service[key]:
                 raise ValueError(f"$.service.{key}: expected nonempty text")
@@ -286,12 +286,15 @@ def validate(document):
         if entry["kind"] == "record":
             for member_index, field in enumerate(entry["fields"]):
                 type_ref(field["type"], f"$.types[{index}].fields[{member_index}].type")
-    if "validation_error" in ir.get("service", {}):
-        validation = _object(ir["service"]["validation_error"], "$.service.validation_error",
-                             ("type", "description"))
-        type_ref(validation["type"], "$.service.validation_error.type")
-        if not isinstance(validation["description"], str) or not validation["description"]:
-            raise ValueError("$.service.validation_error.description: expected nonempty text")
+    for key in ("validation_error", "unauthorized"):
+        if key in ir.get("service", {}):
+            response = _object(ir["service"][key], f"$.service.{key}", ("type", "description"))
+            type_ref(response["type"], f"$.service.{key}.type")
+            if not isinstance(response["description"], str) or not response["description"]:
+                raise ValueError(f"$.service.{key}.description: expected nonempty text")
+    authenticated = "bearer_auth" in ir.get("service", {})
+    if "unauthorized" in ir.get("service", {}) and not authenticated:
+        raise ValueError("$.service.unauthorized: requires bearer_auth")
 
     operation_names = set()
     routes = {}
@@ -300,10 +303,16 @@ def validate(document):
         operation = _object(
             operation, location,
             ("name", "cpp_name", "method", "path", "parameters", "returns", "result"),
-            ("errors", "summary", "description", "response_description", "context_parameters"),
+            ("errors", "summary", "description", "response_description", "context_parameters",
+             "public"),
         )
         if type(operation["result"]) is not bool:
             raise ValueError(f"{location}.result: expected boolean")
+        if "public" in operation:
+            if operation["public"] is not True:
+                raise ValueError(f"{location}.public: expected true")
+            if not authenticated:
+                raise ValueError(f"{location}.public: requires service bearer_auth")
         for key in ("summary", "description", "response_description"):
             if key in operation and (not isinstance(operation[key], str) or not operation[key]):
                 raise ValueError(f"{location}.{key}: expected nonempty text")
@@ -430,6 +439,8 @@ def validate(document):
             if type(status) is not int or not 400 <= status <= 599:
                 raise ValueError(f"{error_location}: invalid error status in {name}: {status!r}")
             _unique(statuses, status, error_location, f"response status in {name}")
+            if status == 401 and "unauthorized" in ir.get("service", {}) and not operation.get("public"):
+                raise ValueError(f"{error_location}: 401 is declared by the service in {name}")
             if "description" in error and (
                 not isinstance(error["description"], str) or not error["description"]
             ):

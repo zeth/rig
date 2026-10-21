@@ -175,6 +175,14 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                 "description": error.get("description", "Error"),
                 "content": {"application/json": {"schema": schema(error["type"])}}
             }
+        unauthorized = service.get("unauthorized") if service else None
+        if operation.get("public"):
+            result["security"] = []
+        elif unauthorized:
+            result["responses"]["401"] = {
+                "description": unauthorized["description"],
+                "content": {"application/json": {"schema": schema(unauthorized["type"])}}
+            }
         if request_needs_decoding(operation):
             if validation:
                 invalid_schema = schema(validation["type"])

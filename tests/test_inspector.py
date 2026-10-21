@@ -216,17 +216,18 @@ class InspectorTests(unittest.TestCase):
             (Path(directory) / "api.hpp").write_text(
                 '#include <rig/route.hpp>\n'
                 'namespace sample {\n'
-                'struct RIG_API("Example API", "0.2.0") RIG_SERVER("/") '
-                'RIG_SERVER("http://127.0.0.1:9000") '
-                'RIG_BEARER_AUTH("bearerAuth", "token") Service {};\n'
                 'struct RIG_OPEN_RECORD Reply { bool ok RIG_BOOL_VALUE(true); };\n'
                 'struct Error { bool ok RIG_BOOL_VALUE(false); };\n'
+                'struct RIG_API("Example API", "0.2.0") RIG_SERVER("/") '
+                'RIG_SERVER("http://127.0.0.1:9000") '
+                'RIG_BEARER_AUTH("bearerAuth", "token") '
+                'RIG_UNAUTHORIZED(Error, "Unauthorized") Service {};\n'
                 'RIG_ROUTE(POST, "/bye")\n'
                 'RIG_SUMMARY("Leaving")\n'
                 'RIG_DESCRIPTION("A hint to the server.")\n'
                 'RIG_RESPONSE_DESCRIPTION("Acknowledged")\n'
-                'RIG_ERROR_RESPONSE(401, Error, "Unauthorized")\n'
                 'Reply bye();\n'
+                'RIG_ROUTE(GET, "/ping") RIG_PUBLIC Reply ping();\n'
                 '}\n'
             )
             result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
@@ -236,6 +237,8 @@ class InspectorTests(unittest.TestCase):
                 "title": "Example API", "version": "0.2.0",
                 "servers": ["/", "http://127.0.0.1:9000"],
                 "bearer_auth": {"name": "bearerAuth", "format": "token"},
+                "unauthorized": {"type": {"kind": "named", "name": "sample::Error"},
+                                 "description": "Unauthorized"},
             })
             self.assertEqual(ir["types"][0]["fields"][0]["bool_value"], True)
             self.assertTrue(ir["types"][0]["open"])
@@ -243,10 +246,9 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(operation["summary"], "Leaving")
             self.assertEqual(operation["description"], "A hint to the server.")
             self.assertEqual(operation["response_description"], "Acknowledged")
-            self.assertEqual(operation["errors"], [{
-                "status": 401, "type": {"kind": "named", "name": "sample::Error"},
-                "description": "Unauthorized",
-            }])
+            self.assertEqual(operation["errors"], [])
+            self.assertNotIn("public", operation)
+            self.assertIs(ir["operations"][1]["public"], True)
             self.assertEqual([entry["name"] for entry in ir["types"]], ["Reply", "Error"])
             codec = subprocess.run(
                 [sys.executable, "-m", "rig", "json-codec", "--api-header", "api.hpp"],

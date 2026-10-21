@@ -91,6 +91,12 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
                     std::meta::constant_of(annotation));
                 collect_type(validation.body, types);
             }
+            for (auto annotation : std::meta::annotations_of_with_type(
+                     member, ^^rig::unauthorized)) {
+                const auto response = std::meta::extract<rig::unauthorized>(
+                    std::meta::constant_of(annotation));
+                collect_type(response.body, types);
+            }
         }
         if (!has_route(member)) continue;
         collect_type(std::meta::return_type_of(member), types);
@@ -334,19 +340,29 @@ void emit_enum(std::ostream& output) {
 }
 
 template <std::meta::info Annotation>
-consteval std::meta::info validation_body() {
-    constexpr auto validation = [:std::meta::constant_of(Annotation):];
-    return validation.body;
+consteval std::meta::info service_response_body() {
+    constexpr auto response = [:std::meta::constant_of(Annotation):];
+    return response.body;
 }
 
 template <std::meta::info Annotation>
-consteval std::array<char, 256> validation_description() {
-    constexpr auto validation = [:std::meta::constant_of(Annotation):];
+consteval std::array<char, 256> service_response_description() {
+    constexpr auto response = [:std::meta::constant_of(Annotation):];
     std::array<char, 256> text{};
     for (std::size_t index = 0; index < text.size(); ++index) {
-        text[index] = validation.description[index];
+        text[index] = response.description[index];
     }
     return text;
+}
+
+// Emits a service-wide response such as validation_error or unauthorized.
+template <std::meta::info Annotation>
+void emit_service_response(std::ostream& output, std::string_view key) {
+    output << ",\"" << key << "\":{\"type\":";
+    emit_type<service_response_body<Annotation>()>(output);
+    output << ",\"description\":";
+    quoted(output, service_response_description<Annotation>().data());
+    output << '}';
 }
 
 template <std::meta::info Type>
@@ -385,11 +401,14 @@ void emit_service(std::ostream& output) {
     static_assert(validation.size() <= 1,
                   "RIG service declarations need at most one validation error");
     if constexpr (validation.size() == 1) {
-        output << ",\"validation_error\":{\"type\":";
-        emit_type<validation_body<validation[0]>()>(output);
-        output << ",\"description\":";
-        quoted(output, validation_description<validation[0]>().data());
-        output << '}';
+        emit_service_response<validation[0]>(output, "validation_error");
+    }
+    constexpr auto unauthorized = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::unauthorized));
+    static_assert(unauthorized.size() <= 1,
+                  "RIG service declarations need at most one unauthorized response");
+    if constexpr (unauthorized.size() == 1) {
+        emit_service_response<unauthorized[0]>(output, "unauthorized");
     }
     output << '}';
 }
@@ -498,6 +517,10 @@ void emit_operation(std::ostream& output) {
         output << ",\"response_description\":";
         quoted(output, value.text);
     }
+    constexpr auto public_operations = std::define_static_array(
+        std::meta::annotations_of_with_type(Function, ^^rig::public_operation));
+    static_assert(public_operations.size() <= 1, "RIG operations need at most one RIG_PUBLIC");
+    if constexpr (public_operations.size() == 1) output << ",\"public\":true";
     output << ",\"parameters\":[";
     bool first = true;
     template for (constexpr auto parameter : std::define_static_array(

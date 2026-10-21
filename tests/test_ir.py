@@ -149,6 +149,28 @@ class IRValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     validate(document)
 
+    def test_service_unauthorized_response_and_public_operations(self):
+        error = {"kind": "named", "name": "sample::Error"}
+        self.ir["service"] = {"title": "Sample", "version": "1.0", "servers": [],
+                              "bearer_auth": {"name": "bearerAuth", "format": "token"},
+                              "unauthorized": {"type": error, "description": "Unauthorized"}}
+        self.ir["operations"][0]["public"] = True
+        self.ir["operations"][0]["errors"].append({"status": 401, "type": error})
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            (lambda ir: ir["operations"][0].pop("public"), "401 is declared by the service"),
+            (lambda ir: ir["operations"][0].update(public=False), "expected true"),
+            (lambda ir: ir["service"].pop("bearer_auth"), "unauthorized: requires bearer_auth"),
+            (lambda ir: [ir["service"].pop(key) for key in ("bearer_auth", "unauthorized")],
+             "public: requires service bearer_auth"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                change(document)
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+
     def test_mapped_exceptions_are_unique_qualified_names(self):
         operation = self.ir["operations"][0]
         operation["errors"][0]["exceptions"] = ["sample::NotFound", "std::out_of_range"]

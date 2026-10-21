@@ -122,6 +122,27 @@ class ConversionTests(unittest.TestCase):
         self.assertIn("return {400, encode_error<sample::Result>(400, error), operation};", routes)
         self.assertNotIn('"invalid_request"', routes)
 
+    def test_service_unauthorized_response_skips_public_operations(self):
+        result = {"kind": "named", "name": "sample::Result"}
+        self.ir["service"] = {"title": "Sample", "version": "1.0", "servers": [],
+                              "bearer_auth": {"name": "bearerAuth", "format": "token"},
+                              "unauthorized": {"type": result, "description": "Unauthorized"}}
+        self.ir["operations"].append({
+            "name": "ping", "cpp_name": "sample::ping", "method": "GET", "path": "/ping",
+            "parameters": [], "returns": result, "result": False, "public": True,
+        })
+        document = convert(self.ir)
+        authenticated = document["paths"]["/results/{id}"]["get"]
+        self.assertEqual(authenticated["responses"]["401"], {
+            "description": "Unauthorized",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Result"}}},
+        })
+        self.assertNotIn("security", authenticated)
+        public = document["paths"]["/ping"]["get"]
+        self.assertEqual(public["security"], [])
+        self.assertNotIn("401", public["responses"])
+        self.assertEqual(document["security"], [{"bearerAuth": []}])
+
     def test_recursive_inline_record_is_rejected(self):
         self.ir["types"][0]["inline"] = True
         self.ir["types"][0]["fields"].append({
