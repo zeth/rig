@@ -8,7 +8,8 @@ RIG_ROUTE(GET, "/results/limited")
 Result get_limited(int limit RIG_QUERY RIG_RANGE(1, 20));
 struct Missing {};
 struct RIG_VALIDATION_ERROR(Result, "Bad request")
-    RIG_UNAUTHORIZED(Result, "Unauthorized") Service {};
+    RIG_UNAUTHORIZED(Result, "Unauthorized")
+    RIG_INTERNAL_ERROR(Result, "Internal server error") Service {};
 RIG_ROUTE(GET, "/ping") RIG_PUBLIC Result ping();
 RIG_ROUTE(GET, "/results/{id}")
 RIG_ERROR_RESPONSE(404, Result, "Not found", Missing)

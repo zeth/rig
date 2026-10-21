@@ -143,6 +143,36 @@ class ConversionTests(unittest.TestCase):
         self.assertNotIn("401", public["responses"])
         self.assertEqual(document["security"], [{"bearerAuth": []}])
 
+    def test_service_internal_error_is_documented_and_caught_once(self):
+        result = {"kind": "named", "name": "sample::Result"}
+        self.ir["service"] = {"title": "Sample", "version": "1.0", "servers": [],
+                              "internal_error": {"type": result,
+                                                 "description": "Internal server error"}}
+        self.ir["operations"].append({
+            "name": "list_results", "cpp_name": "sample::list_results", "method": "GET",
+            "path": "/results", "parameters": [], "returns": result, "result": False,
+            "errors": [{"status": 500, "type": result, "description": "Listing failed",
+                        "exceptions": ["std::exception"]}],
+        })
+        document = convert(self.ir)
+        self.assertEqual(document["paths"]["/results/{id}"]["get"]["responses"]["500"], {
+            "description": "Internal server error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Result"}}},
+        })
+        self.assertEqual(
+            document["paths"]["/results"]["get"]["responses"]["500"]["description"],
+            "Listing failed",
+        )
+        routes = generate_routes(self.ir, "codec.hpp")
+        self.assertEqual(routes.count("catch (const std::exception& error)"), 2)
+        self.assertIn('return response{500, encode_error<sample::Result>(500, error), '
+                      '"get_result"};', routes)
+
+    def test_is_public_answers_false_without_public_operations(self):
+        routes = generate_routes(self.ir, "codec.hpp")
+        self.assertIn("inline bool is_public(const std::string& method, "
+                      "const std::string& path) {\n    (void)method;", routes)
+
     def test_recursive_inline_record_is_rejected(self):
         self.ir["types"][0]["inline"] = True
         self.ir["types"][0]["fields"].append({

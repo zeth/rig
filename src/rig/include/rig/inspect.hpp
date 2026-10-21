@@ -97,6 +97,12 @@ consteval std::vector<std::meta::info> reachable_types(std::meta::info scope) {
                     std::meta::constant_of(annotation));
                 collect_type(response.body, types);
             }
+            for (auto annotation : std::meta::annotations_of_with_type(
+                     member, ^^rig::internal_error)) {
+                const auto response = std::meta::extract<rig::internal_error>(
+                    std::meta::constant_of(annotation));
+                collect_type(response.body, types);
+            }
         }
         if (!has_route(member)) continue;
         collect_type(std::meta::return_type_of(member), types);
@@ -409,6 +415,13 @@ void emit_service(std::ostream& output) {
                   "RIG service declarations need at most one unauthorized response");
     if constexpr (unauthorized.size() == 1) {
         emit_service_response<unauthorized[0]>(output, "unauthorized");
+    }
+    constexpr auto internal = std::define_static_array(
+        std::meta::annotations_of_with_type(Type, ^^rig::internal_error));
+    static_assert(internal.size() <= 1,
+                  "RIG service declarations need at most one internal error");
+    if constexpr (internal.size() == 1) {
+        emit_service_response<internal[0]>(output, "internal_error");
     }
     output << '}';
 }

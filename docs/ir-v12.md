@@ -172,8 +172,8 @@ default.
 discovery. Repeated `RIG_SERVER(url)` annotations list the advertised server
 URLs, and one `RIG_BEARER_AUTH(name, format)` declares a global HTTP bearer
 scheme. The inspector emits these as a `service` object with `title`,
-`version`, `servers`, and optional `bearer_auth`, `validation_error`, and
-`unauthorized`. OpenAPI uses them for `info`,
+`version`, `servers`, and optional `bearer_auth`, `validation_error`,
+`unauthorized`, and `internal_error`. OpenAPI uses them for `info`,
 `servers`, `components.securitySchemes`, and global `security`. Without a
 service declaration, `rig openapi` continues to use its title and version
 arguments and emits no servers or security scheme. A namespace registration
@@ -185,8 +185,20 @@ registers the body type. OpenAPI then documents a 401 response with that body
 on every operation except those marked `RIG_PUBLIC`. Such an operation cannot
 also declare its own 401. `RIG_PUBLIC` on an operation emits `"public": true`,
 requires service bearer auth, and produces `security: []` in OpenAPI. Both
-annotations are documentation: the hosting server still authenticates requests
-before calling the generated dispatcher.
+annotations describe authentication rather than perform it. Generated
+dispatch provides `rig_http::is_public(method, path)`, which applies the same
+route precedence as `dispatch` and returns whether the operation it would
+select is public, so the hosting server can skip authentication for exactly
+those operations.
+
+`RIG_INTERNAL_ERROR(Body, description)` on the service emits
+`service.internal_error` and registers the body type. Generated dispatch then
+catches `std::exception` from every operation after its mapped exceptions and
+returns 500 with `rig_error_body(std::type_identity<Body>{}, 500, exception)`;
+an operation that already maps `std::exception` keeps its own mapping. OpenAPI
+documents the 500 on every operation, keeping a declared 500 with the same body
+and using `anyOf` for a different one. Exceptions not derived from
+`std::exception` still propagate to the hosting server.
 
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
 The IR shape is unchanged: `returns` describes the success body, and `errors`

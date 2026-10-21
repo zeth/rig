@@ -123,6 +123,21 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             "additionalProperties": False,
         }
 
+    def add_generated_response(result, status, body_schema, description):
+        """Add a response the generated dispatcher can return, keeping a declared one."""
+        existing = result["responses"].get(status)
+        if not existing:
+            result["responses"][status] = {
+                "description": description,
+                "content": {"application/json": {"schema": body_schema}},
+            }
+            return
+        declared = existing["content"]["application/json"]["schema"]
+        if declared != body_schema:
+            existing["content"]["application/json"]["schema"] = {
+                "anyOf": [declared, body_schema],
+            }
+
     paths = {}
     for operation in ir["operations"]:
         method = operation["method"].lower()
@@ -185,24 +200,18 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             }
         if request_needs_decoding(operation):
             if validation:
-                invalid_schema = schema(validation["type"])
-                description = validation["description"]
+                add_generated_response(result, "400", schema(validation["type"]),
+                                       validation["description"])
             else:
-                invalid_schema = {"$ref": f"#/components/schemas/{invalid_request_name}"}
-                description = "Invalid request"
-            existing = result["responses"].get("400")
-            if existing and existing["content"]["application/json"]["schema"] == invalid_schema:
-                pass
-            elif existing:
-                error_schema = existing["content"]["application/json"]["schema"]
-                existing["content"]["application/json"]["schema"] = {
-                    "anyOf": [error_schema, invalid_schema],
-                }
-            else:
-                result["responses"]["400"] = {
-                    "description": description,
-                    "content": {"application/json": {"schema": invalid_schema}},
-                }
+                add_generated_response(
+                    result, "400",
+                    {"$ref": f"#/components/schemas/{invalid_request_name}"},
+                    "Invalid request",
+                )
+        internal = service.get("internal_error") if service else None
+        if internal:
+            add_generated_response(result, "500", schema(internal["type"]),
+                                   internal["description"])
         if parameters:
             result["parameters"] = parameters
         if bodies:

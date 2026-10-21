@@ -52,6 +52,7 @@ struct server { char url[256]; };
 struct bearer_auth { char name[64]; char format[64]; };
 struct validation_error { std::meta::info body; char description[256]; };
 struct unauthorized { std::meta::info body; char description[256]; };
+struct internal_error { std::meta::info body; char description[256]; };
 struct public_operation {};
 struct error_response {
     int status;
@@ -98,6 +99,8 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_UNAUTHORIZED(body, description) \
     [[=::rig::unauthorized{^^body, description}]]
 #define RIG_PUBLIC [[=::rig::public_operation{}]]
+#define RIG_INTERNAL_ERROR(body, description) \
+    [[=::rig::internal_error{^^body, description}]]
 #define RIG_ERROR_RESPONSE(status, body, description, ...) \
     [[=::rig::make_error_response<__VA_ARGS__>(status, ^^body, description)]]
 #else
@@ -124,5 +127,6 @@ consteval error_response make_error_response(int status, std::meta::info body,
 #define RIG_VALIDATION_ERROR(body, description)
 #define RIG_UNAUTHORIZED(body, description)
 #define RIG_PUBLIC
+#define RIG_INTERNAL_ERROR(body, description)
 #define RIG_ERROR_RESPONSE(status, body, description, ...)
 #endif

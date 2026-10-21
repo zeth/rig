@@ -310,10 +310,13 @@ class InspectorTests(unittest.TestCase):
                 '#include <exception>\n#include <string>\n#include <type_traits>\n'
                 'namespace sample {\n'
                 'struct Failure { bool ok RIG_BOOL_VALUE(false); std::string message; };\n'
-                'struct RIG_API("Sample", "1.0") '
-                'RIG_VALIDATION_ERROR(Failure, "Bad request") Service {};\n'
+                'struct RIG_API("Sample", "1.0") RIG_BEARER_AUTH("bearerAuth", "token") '
+                'RIG_VALIDATION_ERROR(Failure, "Bad request") '
+                'RIG_INTERNAL_ERROR(Failure, "Internal server error") Service {};\n'
                 'struct Item { std::string name; int count; };\n'
                 'RIG_ROUTE(PUT, "/items/{id}") Item put_item(int id, Item item);\n'
+                'RIG_ROUTE(GET, "/items/{name}") RIG_PUBLIC Item read_item(std::string name);\n'
+                'RIG_ROUTE(GET, "/items/new") Item new_item();\n'
                 'Failure rig_error_body(std::type_identity<Failure>, int status, '
                 'const std::exception& error);\n'
                 '}\n'
@@ -326,6 +329,10 @@ class InspectorTests(unittest.TestCase):
                 "description": "Bad request",
             })
             self.assertIn("sample::Failure", [entry["cpp_name"] for entry in ir["types"]])
+            self.assertEqual(ir["service"]["internal_error"]["description"],
+                             "Internal server error")
+            self.assertEqual([operation.get("public", False) for operation in ir["operations"]],
+                             [False, True, False])
             for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
                                           ("http-routes", "--codec-header", "routes.hpp")):
                 generated = subprocess.run(
@@ -337,7 +344,12 @@ class InspectorTests(unittest.TestCase):
                 (root / output).write_text(generated.stdout)
             (root / "check.cpp").write_text(
                 '#include "routes.hpp"\n'
-                'sample::Item sample::put_item(int, Item item) { return item; }\n'
+                'sample::Item sample::put_item(int, Item item) {\n'
+                '  if (item.count < 0) throw std::logic_error("negative count");\n'
+                '  return item;\n'
+                '}\n'
+                'sample::Item sample::read_item(std::string name) { return {name, 1}; }\n'
+                'sample::Item sample::new_item() { return {"new", 0}; }\n'
                 'sample::Failure sample::rig_error_body(std::type_identity<Failure>, int status, '
                 'const std::exception& error) {\n'
                 '  return {false, std::to_string(status) + ": " + error.what()};\n'
@@ -350,12 +362,20 @@ class InspectorTests(unittest.TestCase):
                 '      missing->body["message"] != "400: missing count") return 2;\n'
                 '  auto path = rig_http::dispatch("PUT", "/items/99999999999", "{}");\n'
                 '  if (!path || path->status != 400 || path->body.contains("code")) return 3;\n'
+                '  auto failed = rig_http::dispatch("PUT", "/items/1", R"({"name":"a","count":-1})");\n'
+                '  if (!failed || failed->status != 500 ||\n'
+                '      failed->body["message"] != "500: negative count") return 4;\n'
+                '  if (!rig_http::is_public("GET", "/items/a?view=1")) return 5;\n'
+                '  if (rig_http::is_public("GET", "/items/new")) return 6;\n'
+                '  if (rig_http::is_public("PUT", "/items/1")) return 7;\n'
+                '  if (rig_http::is_public("GET", "/elsewhere")) return 8;\n'
                 '}\n'
             )
             include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
             binary = root / "check"
             compiled = subprocess.run(
-                ["g++", "-std=c++20", f"-I{include_dir}", "-I.", "check.cpp", "-o", str(binary)],
+                ["g++", "-std=c++20", "-Wall", "-Wextra", "-Werror", f"-I{include_dir}", "-I.",
+                 "check.cpp", "-o", str(binary)],
                 cwd=directory, text=True, capture_output=True,
             )
             self.assertEqual(compiled.returncode, 0, compiled.stderr)

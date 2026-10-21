@@ -172,7 +172,8 @@ def validate(document):
     operations = _array(ir["operations"], "$.operations")
     if "service" in ir:
         service = _object(ir["service"], "$.service", ("title", "version", "servers"),
-                          ("bearer_auth", "validation_error", "unauthorized"))
+                          ("bearer_auth", "validation_error", "unauthorized",
+                           "internal_error"))
         for key in ("title", "version"):
             if not isinstance(service[key], str) or not service[key]:
                 raise ValueError(f"$.service.{key}: expected nonempty text")
@@ -286,7 +287,7 @@ def validate(document):
         if entry["kind"] == "record":
             for member_index, field in enumerate(entry["fields"]):
                 type_ref(field["type"], f"$.types[{index}].fields[{member_index}].type")
-    for key in ("validation_error", "unauthorized"):
+    for key in ("validation_error", "unauthorized", "internal_error"):
         if key in ir.get("service", {}):
             response = _object(ir["service"][key], f"$.service.{key}", ("type", "description"))
             type_ref(response["type"], f"$.service.{key}.type")

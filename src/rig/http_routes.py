@@ -12,6 +12,7 @@ def generate(ir, codec_header):
     has_exceptions = any(error.get("exceptions") for operation in ir["operations"]
                          for error in operation.get("errors", []))
     validation = ir.get("service", {}).get("validation_error")
+    internal = ir.get("service", {}).get("internal_error")
     if not re.fullmatch(r"[A-Za-z_0-9/.-]+", codec_header):
         raise ValueError("invalid codec header path")
 
@@ -61,7 +62,7 @@ def generate(ir, codec_header):
             "    const Body body = rig_error_body(std::type_identity<Body>{}, status, error);",
             "    return rig_json::encode(body);",
             "}",
-        ] if has_exceptions or validation else []),
+        ] if has_exceptions or validation or internal else []),
         "inline response invalid_request(const std::exception& error, std::string_view operation) {",
         *([f"    return {{400, encode_error<{cpp_type(validation['type'])}>(400, error), operation}};"]
           if validation else
@@ -271,6 +272,10 @@ def generate(ir, codec_header):
         mapped = [(error["status"], cpp_type(error["type"]), exception)
                   for error in operation.get("errors", [])
                   for exception in error.get("exceptions", [])]
+        # The service's internal error catches whatever the operation's own
+        # mapping leaves, unless the operation already maps std::exception.
+        if internal and "std::exception" not in [exception for _, _, exception in mapped]:
+            mapped.append((500, cpp_type(internal["type"]), "std::exception"))
         if mapped:
             lines += ["        try {", *("    " + line for line in invoke)]
             for status, body_type, exception in mapped:
@@ -284,6 +289,29 @@ def generate(ir, codec_header):
         lines.append("    }")
     lines += [
         "    return std::nullopt;",
+        "}",
+        "// Whether the operation dispatch would select for this request is RIG_PUBLIC,",
+        "// so the hosting server can skip authentication for it.",
+        "inline bool is_public(const std::string& method, const std::string& path) {",
+    ]
+    # Routes after the last public one in dispatch order can only answer false.
+    public_positions = [position for position, (_, operation) in enumerate(ordered)
+                        if operation.get("public")]
+    if public_positions:
+        lines.append("    const auto route_path = path.substr(0, path.find('?'));")
+        for index, operation in [pair for pair in ordered][:public_positions[-1] + 1]:
+            parameters = {identifier(item["name"]): item for item in operation["parameters"]}
+            pattern, _ = route_pattern(operation["path"], parameters)
+            verdict = "true" if operation.get("public") else "false"
+            lines += [
+                f"    static const std::regex route_{index}({json.dumps(pattern)});",
+                f'    if (method == "{operation["method"]}" && '
+                f"std::regex_match(route_path, route_{index})) return {verdict};",
+            ]
+    else:
+        lines += ["    (void)method;", "    (void)path;"]
+    lines += [
+        "    return false;",
         "}",
         "} // namespace rig_http",
     ]

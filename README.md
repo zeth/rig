@@ -192,7 +192,10 @@ makes dispatch build it with the same `rig_error_body` function used for mapped
 exceptions, and OpenAPI documents that body instead.
 `RIG_UNAUTHORIZED(ErrorResponse, "Unauthorized")` beside `RIG_BEARER_AUTH`
 documents the host's 401 on every operation, and `RIG_PUBLIC` marks an
-operation that needs no token: it gets `security: []` and no 401.
+operation that needs no token: it gets `security: []` and no 401. The host
+asks `rig_http::is_public(method, path)` before authenticating.
+`RIG_INTERNAL_ERROR(ErrorResponse, "Internal server error")` makes every
+operation turn an otherwise unmapped `std::exception` into a documented 500.
 
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
 selected functions with `RIG_ROUTE`, and name its namespace at generation
