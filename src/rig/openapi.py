@@ -174,10 +174,11 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         result = {}
         if include_operation_ids:
             result["operationId"] = operation_names[operation["cpp_name"]]
+        media_type = operation.get("host_response", "application/json")
         result["responses"] = {
             "200": {
                 "description": operation.get("response_description", "Success"),
-                "content": {"application/json": {"schema": schema(operation["returns"])}}
+                "content": {media_type: {"schema": schema(operation["returns"])}}
             }
         }
         for key in ("summary", "description"):
@@ -208,8 +209,9 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
                     {"$ref": f"#/components/schemas/{invalid_request_name}"},
                     "Invalid request",
                 )
+        # The generated dispatcher's catch never sees a host-response operation.
         internal = service.get("internal_error") if service else None
-        if internal:
+        if internal and "host_response" not in operation:
             add_generated_response(result, "500", schema(internal["type"]),
                                    internal["description"])
         if parameters:

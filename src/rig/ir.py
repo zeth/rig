@@ -10,6 +10,7 @@ METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
 PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z_0-9]*)\}\Z")
 LITERAL = re.compile(r"[A-Za-z0-9._~-]+\Z")
+MEDIA_TYPE = re.compile(r"[a-z]+/[A-Za-z0-9][A-Za-z0-9.+-]*\Z")
 
 
 def identifier(value):
@@ -128,8 +129,8 @@ def route_priority(operation):
 
 
 def request_needs_decoding(operation):
-    """Whether route input can fail conversion before calling the operation."""
-    return bool(operation["parameters"])
+    """Whether generated dispatch decodes route input that can fail conversion."""
+    return bool(operation["parameters"]) and "host_response" not in operation
 
 
 def query_value_type(ref):
@@ -305,10 +306,22 @@ def validate(document):
             operation, location,
             ("name", "cpp_name", "method", "path", "parameters", "returns", "result"),
             ("errors", "summary", "description", "response_description", "context_parameters",
-             "public"),
+             "public", "host_response"),
         )
         if type(operation["result"]) is not bool:
             raise ValueError(f"{location}.result: expected boolean")
+        host_served = "host_response" in operation
+        if host_served:
+            media_type = operation["host_response"]
+            if not isinstance(media_type, str) or not MEDIA_TYPE.fullmatch(media_type):
+                raise ValueError(f"{location}.host_response: expected a media type")
+            if media_type != "application/json" and (
+                operation["returns"] != {"kind": "builtin", "name": "string"}
+            ):
+                raise ValueError(f"{location}.host_response: a non-JSON response "
+                                 "requires a string return")
+            if operation.get("context_parameters"):
+                raise ValueError(f"{location}: host-response operations have no context parameters")
         if "public" in operation:
             if operation["public"] is not True:
                 raise ValueError(f"{location}.public: expected true")
@@ -424,6 +437,9 @@ def validate(document):
             error_location = f"{location}.errors[{error_index}]"
             error = _object(error, error_location, ("status", "type"),
                             ("description", "exceptions"))
+            if "exceptions" in error and "host_response" in operation:
+                raise ValueError(f"{error_location}.exceptions: the host maps a host-response "
+                                 f"operation's exceptions in {name}")
             if "exceptions" in error:
                 mapped = _array(error["exceptions"], f"{error_location}.exceptions")
                 if not mapped:

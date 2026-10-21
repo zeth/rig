@@ -171,6 +171,30 @@ class IRValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     validate(document)
 
+    def test_host_response_operations(self):
+        string = {"kind": "builtin", "name": "string"}
+        operation = self.ir["operations"][0]
+        operation.update(returns=string, host_response="text/event-stream")
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            (lambda op: op.update(host_response="yaml"), "expected a media type"),
+            (lambda op: op.update(returns={"kind": "named", "name": "sample::Item"}),
+             "requires a string return"),
+            (lambda op: op.update(context_parameters=[{"name": "db", "position": 0}]),
+             "no context parameters"),
+            (lambda op: op["errors"][0].update(exceptions=["sample::Missing"]),
+             "the host maps"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                change(document["operations"][0])
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+        operation.update(host_response="application/json",
+                         returns={"kind": "named", "name": "sample::Item"})
+        self.assertIs(validate(self.ir), self.ir)
+
     def test_mapped_exceptions_are_unique_qualified_names(self):
         operation = self.ir["operations"][0]
         operation["errors"][0]["exceptions"] = ["sample::NotFound", "std::out_of_range"]

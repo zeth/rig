@@ -200,6 +200,17 @@ documents the 500 on every operation, keeping a declared 500 with the same body
 and using `anyOf` for a different one. Exceptions not derived from
 `std::exception` still propagate to the hosting server.
 
+`RIG_HOST_RESPONSE(media_type)` marks an operation whose response the hosting
+server writes, with that media type. The declaration describes the contract
+and need not be defined. The inspector emits `host_response`; a media type
+other than `application/json` requires a `std::string` return. Such an
+operation has no context parameters and maps no exceptions. Generated dispatch
+still ranks its route with the others and returns no match when it is selected,
+so a less specific generated route never takes its requests; `is_public`
+includes it. OpenAPI documents its success response with that media type, its
+parameters, declared errors and the service 401, but not the generated 400 or
+500, because the generated dispatcher neither decodes nor calls it.
+
 The C++20 API uses `rig::result` in place of the earlier `RIG_ERROR` annotation.
 The IR shape is unchanged: `returns` describes the success body, and `errors`
 describes the status and body of each typed error alternative.

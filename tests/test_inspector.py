@@ -317,6 +317,9 @@ class InspectorTests(unittest.TestCase):
                 'RIG_ROUTE(PUT, "/items/{id}") Item put_item(int id, Item item);\n'
                 'RIG_ROUTE(GET, "/items/{name}") RIG_PUBLIC Item read_item(std::string name);\n'
                 'RIG_ROUTE(GET, "/items/new") Item new_item();\n'
+                '// Declared for the contract only; the host serves it and nothing defines it.\n'
+                'RIG_ROUTE(GET, "/items/{name}/raw") RIG_PUBLIC '
+                'RIG_HOST_RESPONSE("text/plain") std::string raw_item(std::string name);\n'
                 'Failure rig_error_body(std::type_identity<Failure>, int status, '
                 'const std::exception& error);\n'
                 '}\n'
@@ -332,7 +335,8 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["service"]["internal_error"]["description"],
                              "Internal server error")
             self.assertEqual([operation.get("public", False) for operation in ir["operations"]],
-                             [False, True, False])
+                             [False, True, False, True])
+            self.assertEqual(ir["operations"][3]["host_response"], "text/plain")
             for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
                                           ("http-routes", "--codec-header", "routes.hpp")):
                 generated = subprocess.run(
@@ -369,6 +373,8 @@ class InspectorTests(unittest.TestCase):
                 '  if (rig_http::is_public("GET", "/items/new")) return 6;\n'
                 '  if (rig_http::is_public("PUT", "/items/1")) return 7;\n'
                 '  if (rig_http::is_public("GET", "/elsewhere")) return 8;\n'
+                '  if (rig_http::dispatch("GET", "/items/a/raw", "")) return 9;\n'
+                '  if (!rig_http::is_public("GET", "/items/a/raw")) return 10;\n'
                 '}\n'
             )
             include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"

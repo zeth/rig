@@ -173,6 +173,42 @@ class ConversionTests(unittest.TestCase):
         self.assertIn("inline bool is_public(const std::string& method, "
                       "const std::string& path) {\n    (void)method;", routes)
 
+    def test_host_response_operation_is_documented_but_not_dispatched(self):
+        result = {"kind": "named", "name": "sample::Result"}
+        string = {"kind": "builtin", "name": "string"}
+        self.ir["service"] = {"title": "Sample", "version": "1.0", "servers": [],
+                              "bearer_auth": {"name": "bearerAuth", "format": "token"},
+                              "unauthorized": {"type": result, "description": "Unauthorized"},
+                              "internal_error": {"type": result, "description": "Failed"}}
+        self.ir["operations"] += [{
+            "name": "download", "cpp_name": "sample::download", "method": "GET",
+            "path": "/downloads/{name}",
+            "parameters": [{"name": "name", "type": string}],
+            "returns": string, "result": False, "public": True,
+            "host_response": "application/yaml",
+            "errors": [{"status": 404, "type": result, "description": "Not found"}],
+        }, {
+            "name": "stream", "cpp_name": "sample::stream", "method": "GET",
+            "path": "/results/7", "parameters": [],
+            "returns": result, "result": False, "host_response": "application/json",
+        }]
+        # The integer placeholder route /results/{id} must not take /results/7.
+        document = convert(self.ir)
+        download = document["paths"]["/downloads/{name}"]["get"]
+        self.assertEqual(download["responses"]["200"]["content"],
+                         {"application/yaml": {"schema": {"type": "string"}}})
+        self.assertEqual(sorted(download["responses"]), ["200", "404"])
+        self.assertEqual(download["security"], [])
+        self.assertEqual(download["parameters"][0]["in"], "path")
+        stream = document["paths"]["/results/7"]["get"]["responses"]
+        self.assertEqual(sorted(stream), ["200", "401"])
+        routes = generate_routes(self.ir, "codec.hpp")
+        self.assertNotIn("sample::download(", routes)
+        self.assertNotIn("sample::stream(", routes)
+        self.assertIn("return std::nullopt;  // stream is served by the host", routes)
+        self.assertLess(routes.index("// stream is served by the host"),
+                        routes.index("sample::get_result("))
+
     def test_recursive_inline_record_is_rejected(self):
         self.ir["types"][0]["inline"] = True
         self.ir["types"][0]["fields"].append({

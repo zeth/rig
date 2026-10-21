@@ -181,6 +181,15 @@ def generate(ir, codec_header):
         name = identifier(operation["name"])
         parameters = {identifier(item["name"]): item for item in operation["parameters"]}
         pattern, captures = route_pattern(operation["path"], parameters)
+        if "host_response" in operation:
+            # Matching it here keeps a less specific generated route from taking it.
+            lines += [
+                f"    static const std::regex route_{index}({json.dumps(pattern)});",
+                f'    if (method == "{operation["method"]}" && '
+                f"std::regex_match(route_path, route_{index}))",
+                f"        return std::nullopt;  // {name} is served by the host",
+            ]
+            continue
         bodies = [item for item in operation["parameters"]
                   if item["name"] not in captures and item.get("in") != "query"]
         queries = [item for item in operation["parameters"] if item.get("in") == "query"]

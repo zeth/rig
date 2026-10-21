@@ -197,6 +197,11 @@ asks `rig_http::is_public(method, path)` before authenticating.
 `RIG_INTERNAL_ERROR(ErrorResponse, "Internal server error")` makes every
 operation turn an otherwise unmapped `std::exception` into a documented 500.
 
+`RIG_HOST_RESPONSE("text/event-stream")` declares an operation whose response
+the host writes, such as an event stream or a file download. RIG documents it
+from the declaration, which need not be defined, and generated dispatch hands
+its requests back to the host.
+
 To add an app, include `rig/route.hpp` in its C++20 API header, annotate the
 selected functions with `RIG_ROUTE`, and name its namespace at generation
 time:

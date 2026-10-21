@@ -534,6 +534,14 @@ void emit_operation(std::ostream& output) {
         std::meta::annotations_of_with_type(Function, ^^rig::public_operation));
     static_assert(public_operations.size() <= 1, "RIG operations need at most one RIG_PUBLIC");
     if constexpr (public_operations.size() == 1) output << ",\"public\":true";
+    constexpr auto host_responses = std::define_static_array(
+        std::meta::annotations_of_with_type(Function, ^^rig::host_response));
+    static_assert(host_responses.size() <= 1, "RIG operations need at most one RIG_HOST_RESPONSE");
+    if constexpr (host_responses.size() == 1) {
+        constexpr auto value = [:std::meta::constant_of(host_responses[0]):];
+        output << ",\"host_response\":";
+        quoted(output, value.media_type);
+    }
     output << ",\"parameters\":[";
     bool first = true;
     template for (constexpr auto parameter : std::define_static_array(
