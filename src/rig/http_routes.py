@@ -46,6 +46,7 @@ def generate(ir, codec_header):
         "// Generated from RIG IR; do not edit.",
         "#pragma once",
         f'#include "{codec_header}"',
+        "#include <any>",
         "#include <charconv>",
         "#include <exception>",
         "#include <functional>",
@@ -71,6 +72,8 @@ def generate(ir, codec_header):
         "    std::string_view operation;",
         "    // The methods the path accepts, for a 405's Allow header; empty otherwise.",
         "    std::string allow = {};",
+        "    // A host-value operation's value, for the host to write the body with; empty otherwise.",
+        "    std::any host = {};",
         "};",
         *([
             "// The error passed to rig_error_body for a 405.",
@@ -242,7 +245,7 @@ def generate(ir, codec_header):
         name = identifier(operation["name"])
         parameters = {identifier(item["name"]): item for item in operation["parameters"]}
         pattern, captures = route_pattern(operation["path"], parameters)
-        if "host_response" in operation:
+        if "host_response" in operation and not operation.get("host_value"):
             # Matching it here keeps a less specific generated route from taking it.
             lines += [
                 f"    static const std::regex route_{index}({json.dumps(pattern)});",
@@ -386,7 +389,16 @@ def generate(ir, codec_header):
                           for index in range(len(arguments) + len(contexts))]
         call = f"{operation['cpp_name']}({', '.join(call_arguments)})"
         success = operation.get("success_status", 200)
-        if operation.get("chosen_status"):
+        if operation.get("host_value"):
+            statuses = [success, *(extra["status"] for extra in operation.get("success_responses", []))]
+            undeclared = " && ".join(f"outcome.status != {status}" for status in statuses)
+            invoke = [
+                f"        auto outcome = {call};",
+                f"        if ({undeclared})",
+                f'            throw std::logic_error("{name} chose an undeclared success status");',
+                f'        return response{{outcome.status, json(), "{name}", {{}}, std::move(outcome.value)}};',
+            ]
+        elif operation.get("chosen_status"):
             statuses = [success, *(extra["status"] for extra in operation["success_responses"])]
             undeclared = " && ".join(f"outcome.status != {status}" for status in statuses)
             invoke = [
@@ -488,14 +500,17 @@ def generate(ir, codec_header):
         "inline bool is_host_served(const std::string& method, const std::string& path) {",
     ]
     # Routes after the last host-served one in dispatch order can only answer false.
+    def host_served(operation):
+        return "host_response" in operation and not operation.get("host_value")
+
     host_positions = [position for position, (_, operation) in enumerate(ordered)
-                      if "host_response" in operation]
+                      if host_served(operation)]
     if host_positions:
         lines.append("    const auto route_path = path.substr(0, path.find('?'));")
         for index, operation in ordered[:host_positions[-1] + 1]:
             parameters = {identifier(item["name"]): item for item in operation["parameters"]}
             pattern, _ = route_pattern(operation["path"], parameters)
-            verdict = "true" if "host_response" in operation else "false"
+            verdict = "true" if host_served(operation) else "false"
             lines += [
                 f"    static const std::regex route_{index}({json.dumps(pattern)});",
                 f'    if (method == "{operation["method"]}" && '

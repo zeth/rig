@@ -318,6 +318,15 @@ chooses the status at run time. A `text/event-stream` operation may also list
 stream is finished and it should stop reconnecting. Outside host responses, only a `chosen_status`
 operation has `success_responses`.
 
+A host-response operation that returns `rig::host_value` instead of a string
+emits `"host_value": true`. Generated dispatch then calls it like any generated
+operation: it decodes the parameters, passes context, and maps exceptions to
+their declared errors. The operation returns the status it chose, 200 or one of
+its `success_responses` (any other is the service's internal error), and a
+`std::any` holding whatever the host needs to write the body, such as a function
+that streams it. Dispatch returns them as the response's `status` and `host`,
+with no JSON body, and `is_host_served` answers false for the operation.
+
 `RIG_HEADER(name)` on a string parameter makes it a request header, emitted
 with `"in": "header"` and the header's `name`, which need not be a C++
 identifier, such as `Last-Event-ID`. OpenAPI marks it required only when its

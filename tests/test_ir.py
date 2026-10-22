@@ -333,7 +333,16 @@ class IRValidationTests(unittest.TestCase):
             (lambda op: op["sse_events"].append(dict(op["sse_events"][0])), "duplicate event"),
             (lambda op: op["success_responses"].append({"status": 205, "description": "Reset"}),
              "or 204 for an event stream"),
+            (lambda op: op.update(host_value=False), "expected true on a host-response operation"),
+            (lambda op: op.update(context_parameters=[{"name": "db", "position": 0}]),
+             "no context parameters"),
         )
+        # Generated dispatch calls a host-value operation, so it may take context and map
+        # exceptions like any generated operation.
+        called = copy.deepcopy(self.ir)
+        called["operations"][0].update(host_value=True,
+                                       context_parameters=[{"name": "db", "position": 0}])
+        self.assertIs(validate(called), called)
         for change, message in cases:
             with self.subTest(message=message):
                 document = copy.deepcopy(self.ir)

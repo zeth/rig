@@ -326,6 +326,12 @@ class InspectorTests(unittest.TestCase):
                 'RIG_HOST_RESPONSE("text/plain") std::string raw_item(std::string name);\n'
                 'RIG_ROUTE(GET, "/whoami") Item whoami(std::string host RIG_HEADER("Host"), '
                 'std::optional<std::string> agent RIG_HEADER("User-Agent"));\n'
+                '// The host streams it, but generated dispatch decodes and answers the request.\n'
+                'RIG_ROUTE(GET, "/items/{name}/feed") RIG_HOST_RESPONSE("text/event-stream") '
+                'RIG_SSE_EVENT("item", Item) RIG_SUCCESS_RESPONSE(204, "Finished") '
+                'RIG_ERROR_RESPONSE(404, Failure, "Missing", std::out_of_range) '
+                'rig::host_value item_feed(std::string name, '
+                'std::optional<std::string> after RIG_HEADER("Last-Event-ID"));\n'
                 'Failure rig_error_body(std::type_identity<Failure>, int status, '
                 'const std::exception& error);\n'
                 '}\n'
@@ -343,7 +349,7 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["service"]["method_not_allowed"]["description"],
                              "Method not allowed")
             self.assertEqual([operation.get("public", False) for operation in ir["operations"]],
-                             [False, True, False, False, True, False])
+                             [False, True, False, False, True, False, False])
             self.assertEqual(ir["operations"][4]["host_response"], "text/plain")
             self.assertIs(ir["operations"][3]["chosen_status"], True)
             self.assertEqual(ir["operations"][3]["returns"],
@@ -367,6 +373,13 @@ class InspectorTests(unittest.TestCase):
                 'sample::Item sample::new_item() { return {"new", 0}; }\n'
                 'sample::Item sample::whoami(std::string host, std::optional<std::string> agent) {\n'
                 '  return {host + "/" + agent.value_or("-"), 0};\n'
+                '}\n'
+                'rig::host_value sample::item_feed(std::string name, '
+                'std::optional<std::string> after) {\n'
+                '  if (name == "gone") throw std::out_of_range("no such item");\n'
+                '  if (name == "odd") return {202, {}};\n'
+                '  if (after == "end") return {204, {}};\n'
+                '  return {200, std::string("feed:" + name)};\n'
                 '}\n'
                 '// An existing item is 200 and a new one 201; 7 picks an undeclared status.\n'
                 'rig::success<sample::Item> sample::add_item(Item item) {\n'
@@ -402,6 +415,19 @@ class InspectorTests(unittest.TestCase):
                 '  auto nobody = rig_http::dispatch("GET", "/whoami", "");\n'
                 '  if (!nobody || nobody->status != 400 ||\n'
                 '      nobody->body["message"] != "400: missing header: Host") return 25;\n'
+                '  // A host-value operation hands its value to the host with the status it chose.\n'
+                '  auto feed = rig_http::dispatch("GET", "/items/a/feed", "");\n'
+                '  if (!feed || feed->status != 200 ||\n'
+                '      std::any_cast<std::string>(feed->host) != "feed:a") return 26;\n'
+                '  auto finished = rig_http::dispatch("GET", "/items/a/feed", "", [](std::string_view) {\n'
+                '    return std::optional<std::string>("end");\n'
+                '  });\n'
+                '  if (!finished || finished->status != 204 || finished->host.has_value()) return 27;\n'
+                '  auto gone = rig_http::dispatch("GET", "/items/gone/feed", "");\n'
+                '  if (!gone || gone->status != 404 || gone->host.has_value()) return 28;\n'
+                '  auto odd = rig_http::dispatch("GET", "/items/odd/feed", "");\n'
+                '  if (!odd || odd->status != 500) return 29;\n'
+                '  if (rig_http::is_host_served("GET", "/items/a/feed")) return 30;\n'
                 '  if (rig_http::is_host_served("POST", "/items/a/raw")) return 21;\n'
                 '  if (rig_http::is_host_served("GET", "/items/a")) return 22;\n'
                 '  if (rig_http::is_host_served("GET", "/elsewhere")) return 23;\n'

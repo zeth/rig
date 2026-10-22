@@ -1,5 +1,6 @@
 #pragma once
 
+#include <any>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -30,6 +31,14 @@ template <typename Json>
 struct event {
     std::string name;
     Json data;
+};
+
+// What a RIG_HOST_RESPONSE operation returns when generated dispatch should call it: the
+// status it chose (200, or one of its RIG_SUCCESS_RESPONSE statuses, such as 204) and
+// whatever the host needs to write the body itself, such as a function that streams it.
+struct host_value {
+    int status = 200;
+    std::any value;
 };
 
 template <typename T>

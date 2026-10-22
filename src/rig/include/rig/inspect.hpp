@@ -43,6 +43,10 @@ consteval bool is_success_type(std::meta::info type) {
         std::meta::template_of(type) == ^^rig::success;
 }
 
+consteval bool is_host_value_type(std::meta::info type) {
+    return std::meta::is_same_type(type, ^^rig::host_value);
+}
+
 // nlohmann::json, recognised by shape so RIG needs no nlohmann header: a
 // basic_json specialisation in namespace nlohmann whose objects are std::map.
 consteval bool is_json_object_type(std::meta::info type) {
@@ -90,6 +94,8 @@ consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& 
         collect_type(std::meta::template_arguments_of(type)[0], types);
         return;
     }
+
+    if (is_host_value_type(type)) return;
 
     if (is_result_type(type)) {
         const auto arguments = std::meta::template_arguments_of(type);
@@ -904,11 +910,15 @@ void emit_operation(std::ostream& output) {
         static_assert(!is_success_type(arguments[0]),
                       "RIG operations choose a success status with rig::success, not in a result");
         emit_type<arguments[0]>(output);
+    } else if constexpr (is_host_value_type(return_type)) {
+        // The host writes the body; the contract describes it by its media type.
+        output << "{\"kind\":\"builtin\",\"name\":\"string\"}";
     } else {
         emit_type<return_type>(output);
     }
     output << ",\"result\":" << (is_result_type(return_type) ? "true" : "false");
     if constexpr (is_success_type(return_type)) output << ",\"chosen_status\":true";
+    if constexpr (is_host_value_type(return_type)) output << ",\"host_value\":true";
     output << ",\"errors\":[";
     first = true;
     if constexpr (is_result_type(return_type)) {

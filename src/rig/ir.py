@@ -419,11 +419,15 @@ def validate(document):
             ("errors", "summary", "description", "response_description", "context_parameters",
              "public", "host_response", "success_status", "operation_id", "response_values",
              "response_format", "success_responses", "response_headers", "sse_events",
-             "chosen_status"),
+             "chosen_status", "host_value"),
         )
         if type(operation["result"]) is not bool:
             raise ValueError(f"{location}.result: expected boolean")
         host_served = "host_response" in operation
+        # A host-value operation is called by generated dispatch, which hands its value to the host.
+        host_value = "host_value" in operation
+        if host_value and (operation["host_value"] is not True or not host_served):
+            raise ValueError(f"{location}.host_value: expected true on a host-response operation")
         if host_served:
             media_type = operation["host_response"]
             if not isinstance(media_type, str) or not MEDIA_TYPE.fullmatch(media_type):
@@ -433,7 +437,7 @@ def validate(document):
             ):
                 raise ValueError(f"{location}.host_response: a non-JSON response "
                                  "requires a string return")
-            if operation.get("context_parameters"):
+            if operation.get("context_parameters") and not host_value:
                 raise ValueError(f"{location}: host-response operations have no context parameters")
         if "operation_id" in operation:
             _name(operation["operation_id"], f"{location}.operation_id")
@@ -653,7 +657,7 @@ def validate(document):
             error_location = f"{location}.errors[{error_index}]"
             error = _object(error, error_location, ("status", "type"),
                             ("description", "exceptions"))
-            if "exceptions" in error and "host_response" in operation:
+            if "exceptions" in error and "host_response" in operation and "host_value" not in operation:
                 raise ValueError(f"{error_location}.exceptions: the host maps a host-response "
                                  f"operation's exceptions in {name}")
             if "exceptions" in error:
