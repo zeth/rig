@@ -289,6 +289,26 @@ class IRValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     validate(document)
 
+    def test_chosen_status_needs_declared_statuses_on_a_generated_operation(self):
+        operation = self.ir["operations"][0]
+        operation.update(chosen_status=True, result=False, errors=[],
+                         success_responses=[{"status": 201, "description": "Created"}])
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            (lambda op: op.update(chosen_status=False), "expected true"),
+            (lambda op: op.pop("success_responses"), "requires success_responses"),
+            (lambda op: op.update(result=True), "without a result"),
+            (lambda op: op.update(returns={"kind": "builtin", "name": "string"},
+                                  host_response="text/plain"), "without a result"),
+            (lambda op: op.pop("chosen_status"), "requires host_response or chosen_status"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                change(document["operations"][0])
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+
     def test_header_parameters_and_events_need_host_responses(self):
         string = {"kind": "builtin", "name": "string"}
         operation = self.ir["operations"][0]

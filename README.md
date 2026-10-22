@@ -205,6 +205,10 @@ answer a declared path with an undeclared method with 405, setting
 A `nlohmann::json` field is a free-form JSON object, a
 `std::map<std::string, T>` field is an object of `T` values, and
 `RIG_SUCCESS_STATUS(201)` gives an operation a success status other than 200.
+An operation that answers with one of several statuses returns
+`rig::success<Body>{status, body}` and declares each status besides its
+`RIG_SUCCESS_STATUS` with `RIG_SUCCESS_RESPONSE(201, "Created")`; dispatch
+answers any other status with the service's internal error.
 `RIG_WRITE_ONLY` marks a field clients send but responses never contain, such
 as a secret. `RIG_FORMAT("uuid")`, `RIG_MIN_LENGTH(1)`, `RIG_MAX_LENGTH(40)`
 and `RIG_DEFAULT(50)` describe fields and parameters, and

@@ -307,6 +307,7 @@ class InspectorTests(unittest.TestCase):
             root = Path(directory)
             (root / "api.hpp").write_text(
                 '#include <rig/route.hpp>\n'
+                '#include <rig/result.hpp>\n'
                 '#include <exception>\n#include <string>\n#include <type_traits>\n'
                 'namespace sample {\n'
                 'struct Failure { bool ok RIG_BOOL_VALUE(false); std::string message; };\n'
@@ -318,6 +319,8 @@ class InspectorTests(unittest.TestCase):
                 'RIG_ROUTE(PUT, "/items/{id}") Item put_item(int id, Item item);\n'
                 'RIG_ROUTE(GET, "/items/{name}") RIG_PUBLIC Item read_item(std::string name);\n'
                 'RIG_ROUTE(GET, "/items/new") Item new_item();\n'
+                'RIG_ROUTE(POST, "/items") RIG_SUCCESS_RESPONSE(201, "Created") '
+                'rig::success<Item> add_item(Item item);\n'
                 '// Declared for the contract only; the host serves it and nothing defines it.\n'
                 'RIG_ROUTE(GET, "/items/{name}/raw") RIG_PUBLIC '
                 'RIG_HOST_RESPONSE("text/plain") std::string raw_item(std::string name);\n'
@@ -338,8 +341,11 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["service"]["method_not_allowed"]["description"],
                              "Method not allowed")
             self.assertEqual([operation.get("public", False) for operation in ir["operations"]],
-                             [False, True, False, True])
-            self.assertEqual(ir["operations"][3]["host_response"], "text/plain")
+                             [False, True, False, False, True])
+            self.assertEqual(ir["operations"][4]["host_response"], "text/plain")
+            self.assertIs(ir["operations"][3]["chosen_status"], True)
+            self.assertEqual(ir["operations"][3]["returns"],
+                             {"kind": "named", "name": "sample::Item"})
             for command, flag, output in (("json-codec", "--api-header", "codec.hpp"),
                                           ("http-routes", "--codec-header", "routes.hpp")):
                 generated = subprocess.run(
@@ -357,6 +363,10 @@ class InspectorTests(unittest.TestCase):
                 '}\n'
                 'sample::Item sample::read_item(std::string name) { return {name, 1}; }\n'
                 'sample::Item sample::new_item() { return {"new", 0}; }\n'
+                '// An existing item is 200 and a new one 201; 7 picks an undeclared status.\n'
+                'rig::success<sample::Item> sample::add_item(Item item) {\n'
+                '  return {item.count == 7 ? 202 : item.count > 0 ? 200 : 201, item};\n'
+                '}\n'
                 'sample::Failure sample::rig_error_body(std::type_identity<Failure>, int status, '
                 'const std::exception& error) {\n'
                 '  return {false, std::to_string(status) + ": " + error.what()};\n'
@@ -386,6 +396,13 @@ class InspectorTests(unittest.TestCase):
                 '  if (!host || host->status != 405 || host->allow != "GET") return 12;\n'
                 '  if (rig_http::dispatch("GET", "/elsewhere", "")) return 13;\n'
                 '  if (!ok->allow.empty()) return 14;\n'
+                '  auto created = rig_http::dispatch("POST", "/items", R"({"name":"b","count":0})");\n'
+                '  if (!created || created->status != 201 || created->body["name"] != "b") return 15;\n'
+                '  auto existing = rig_http::dispatch("POST", "/items", R"({"name":"b","count":1})");\n'
+                '  if (!existing || existing->status != 200) return 16;\n'
+                '  auto undeclared = rig_http::dispatch("POST", "/items", R"({"name":"b","count":7})");\n'
+                '  if (!undeclared || undeclared->status != 500 || undeclared->body["message"] !=\n'
+                '      "500: add_item chose an undeclared success status") return 17;\n'
                 '}\n'
             )
             include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"

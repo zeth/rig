@@ -417,7 +417,8 @@ def validate(document):
             ("name", "cpp_name", "method", "path", "parameters", "returns", "result"),
             ("errors", "summary", "description", "response_description", "context_parameters",
              "public", "host_response", "success_status", "operation_id", "response_values",
-             "response_format", "success_responses", "response_headers", "sse_events"),
+             "response_format", "success_responses", "response_headers", "sse_events",
+             "chosen_status"),
         )
         if type(operation["result"]) is not bool:
             raise ValueError(f"{location}.result: expected boolean")
@@ -437,9 +438,19 @@ def validate(document):
             _name(operation["operation_id"], f"{location}.operation_id")
             _unique(operation_ids, operation["operation_id"], location, "operation ID")
         returns_string = operation["returns"] == STRING
+        chosen_status = "chosen_status" in operation
+        if chosen_status:
+            if operation["chosen_status"] is not True:
+                raise ValueError(f"{location}.chosen_status: expected true")
+            if host_served or operation["result"]:
+                raise ValueError(f"{location}.chosen_status: requires a generated operation "
+                                 "without a result")
+            if not operation.get("success_responses"):
+                raise ValueError(f"{location}.chosen_status: requires success_responses")
         for key in ("response_values", "response_format", "success_responses", "response_headers"):
-            if key in operation and not host_served:
-                raise ValueError(f"{location}.{key}: requires host_response")
+            if key in operation and not (host_served or (chosen_status and key == "success_responses")):
+                raise ValueError(f"{location}.{key}: requires host_response"
+                                 + (" or chosen_status" if key == "success_responses" else ""))
         if "response_values" in operation:
             values = _array(operation["response_values"], f"{location}.response_values")
             if not returns_string or not values or any(

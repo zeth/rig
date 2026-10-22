@@ -65,7 +65,13 @@ Every field, parameter, return value, and error body has a type reference:
 An operation has `name`, `cpp_name`, `method`, `path`, `parameters`, and `returns`.
 The inspector writes `result: true` for a `rig::result` return type and
 `result: false` for a plain return type. A documented server-level error can
-therefore coexist with a plain function return.
+therefore coexist with a plain function return. For a `rig::success<Body>`
+return, `returns` is `Body` and the inspector writes `chosen_status: true`.
+Such an operation is generated, has `result: false`, and lists its other
+statuses in `success_responses` (from `RIG_SUCCESS_RESPONSE`). Generated
+dispatch answers with the status the function returned, after checking it is
+the operation's `success_status` (200 by default) or one of those; any other
+status is an internal error.
 `errors` is an optional ordered array of `{status, type}` objects; the
 inspector writes it even when empty. A function returning `rig::result<Success,
 rig::error<Status, Body>...>` supplies both the success type and its declared
@@ -301,7 +307,8 @@ includes it. A host-response operation can describe its response further:
 a string response may be; `RIG_FORMAT(name)` emits `response_format`, such as
 `binary`; and each `RIG_SUCCESS_RESPONSE(status, description)` emits an entry
 in `success_responses`, another 2xx status with the same body, for a host that
-chooses the status at run time.
+chooses the status at run time. Outside host responses, only a `chosen_status`
+operation has `success_responses`.
 
 `RIG_HEADER(name)` on a string parameter of a host-response operation makes it
 a request header, emitted with `"in": "header"` and the header's `name`, which

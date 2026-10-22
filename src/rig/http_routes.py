@@ -368,7 +368,16 @@ def generate(ir, codec_header):
                           for index in range(len(arguments) + len(contexts))]
         call = f"{operation['cpp_name']}({', '.join(call_arguments)})"
         success = operation.get("success_status", 200)
-        if operation["result"]:
+        if operation.get("chosen_status"):
+            statuses = [success, *(extra["status"] for extra in operation["success_responses"])]
+            undeclared = " && ".join(f"outcome.status != {status}" for status in statuses)
+            invoke = [
+                f"        auto outcome = {call};",
+                f"        if ({undeclared})",
+                f'            throw std::logic_error("{name} chose an undeclared success status");',
+                f'        return response{{outcome.status, rig_json::encode(outcome.body), "{name}"}};',
+            ]
+        elif operation["result"]:
             success_type = cpp_type(operation["returns"])
             invoke = [
                 f"        const auto outcome = {call};",

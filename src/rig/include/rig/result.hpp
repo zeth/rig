@@ -13,6 +13,15 @@ struct error {
     Body body;
 };
 
+// A success body with the status the operation chose at run time: its RIG_SUCCESS_STATUS
+// (200 by default) or one of its RIG_SUCCESS_RESPONSE statuses. Generated dispatch answers any
+// other status with the service's internal error.
+template <typename Body>
+struct success {
+    int status;
+    Body body;
+};
+
 template <typename T>
 struct is_error : std::false_type {};
 

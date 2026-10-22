@@ -38,6 +38,11 @@ consteval bool is_result_type(std::meta::info type) {
         std::meta::template_of(type) == ^^rig::result;
 }
 
+consteval bool is_success_type(std::meta::info type) {
+    return std::meta::has_template_arguments(type) &&
+        std::meta::template_of(type) == ^^rig::success;
+}
+
 // nlohmann::json, recognised by shape so RIG needs no nlohmann header: a
 // basic_json specialisation in namespace nlohmann whose objects are std::map.
 consteval bool is_json_object_type(std::meta::info type) {
@@ -78,6 +83,11 @@ consteval void collect_type(std::meta::info type, std::vector<std::meta::info>& 
         is_json_object_type(type)) return;
     if (is_string_map_type(type)) {
         collect_type(std::meta::template_arguments_of(type)[1], types);
+        return;
+    }
+
+    if (is_success_type(type)) {
+        collect_type(std::meta::template_arguments_of(type)[0], types);
         return;
     }
 
@@ -888,14 +898,17 @@ void emit_operation(std::ostream& output) {
     }
     output << "],\"returns\":";
     constexpr auto return_type = std::meta::remove_cvref(std::meta::return_type_of(Function));
-    if constexpr (is_result_type(return_type)) {
+    if constexpr (is_result_type(return_type) || is_success_type(return_type)) {
         constexpr auto arguments = std::define_static_array(
             std::meta::template_arguments_of(return_type));
+        static_assert(!is_success_type(arguments[0]),
+                      "RIG operations choose a success status with rig::success, not in a result");
         emit_type<arguments[0]>(output);
     } else {
         emit_type<return_type>(output);
     }
     output << ",\"result\":" << (is_result_type(return_type) ? "true" : "false");
+    if constexpr (is_success_type(return_type)) output << ",\"chosen_status\":true";
     output << ",\"errors\":[";
     first = true;
     if constexpr (is_result_type(return_type)) {
