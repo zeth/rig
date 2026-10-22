@@ -74,6 +74,8 @@ def generate(ir, codec_header):
         "    std::string allow = {};",
         "    // A host-value operation's value, for the host to write the body with; empty otherwise.",
         "    std::any host = {};",
+        "    // A text operation's media type, whose body is a JSON string the host writes as text.",
+        "    std::string_view media_type = \"application/json\";",
         "};",
         *([
             "// The error passed to rig_error_body for a 405.",
@@ -420,6 +422,9 @@ def generate(ir, codec_header):
                 "            }",
                 "        }, outcome.value());",
             ]
+        elif "media_type" in operation:
+            invoke = [f'        return response{{{success}, json({call}), "{name}", {{}}, {{}}, '
+                      f'{json.dumps(operation["media_type"])}}};']
         else:
             invoke = [f'        return response{{{success}, rig_json::encode({call}), "{name}"}};']
         mapped = [(error["status"], cpp_type(error["type"]), exception)

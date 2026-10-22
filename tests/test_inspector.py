@@ -332,6 +332,8 @@ class InspectorTests(unittest.TestCase):
                 'RIG_ERROR_RESPONSE(404, Failure, "Missing", std::out_of_range) '
                 'rig::host_value item_feed(std::string name, '
                 'std::optional<std::string> after RIG_HEADER("Last-Event-ID"));\n'
+                'RIG_ROUTE(GET, "/ping") RIG_PUBLIC RIG_RESPONSE_MEDIA_TYPE("text/plain") '
+                'RIG_STRING_VALUES("pong") std::string ping();\n'
                 'Failure rig_error_body(std::type_identity<Failure>, int status, '
                 'const std::exception& error);\n'
                 '}\n'
@@ -349,7 +351,7 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["service"]["method_not_allowed"]["description"],
                              "Method not allowed")
             self.assertEqual([operation.get("public", False) for operation in ir["operations"]],
-                             [False, True, False, False, True, False, False])
+                             [False, True, False, False, True, False, False, True])
             self.assertEqual(ir["operations"][4]["host_response"], "text/plain")
             self.assertIs(ir["operations"][3]["chosen_status"], True)
             self.assertEqual(ir["operations"][3]["returns"],
@@ -374,6 +376,7 @@ class InspectorTests(unittest.TestCase):
                 'sample::Item sample::whoami(std::string host, std::optional<std::string> agent) {\n'
                 '  return {host + "/" + agent.value_or("-"), 0};\n'
                 '}\n'
+                'std::string sample::ping() { return "pong"; }\n'
                 'rig::host_value sample::item_feed(std::string name, '
                 'std::optional<std::string> after) {\n'
                 '  if (name == "gone") throw std::out_of_range("no such item");\n'
@@ -428,6 +431,10 @@ class InspectorTests(unittest.TestCase):
                 '  auto odd = rig_http::dispatch("GET", "/items/odd/feed", "");\n'
                 '  if (!odd || odd->status != 500) return 29;\n'
                 '  if (rig_http::is_host_served("GET", "/items/a/feed")) return 30;\n'
+                '  // A text operation tells the host its media type; the body is the string.\n'
+                '  auto pong = rig_http::dispatch("GET", "/ping", "");\n'
+                '  if (!pong || pong->status != 200 || pong->media_type != "text/plain" ||\n'
+                '      pong->body != "pong" || ok->media_type != "application/json") return 31;\n'
                 '  if (rig_http::is_host_served("POST", "/items/a/raw")) return 21;\n'
                 '  if (rig_http::is_host_served("GET", "/items/a")) return 22;\n'
                 '  if (rig_http::is_host_served("GET", "/elsewhere")) return 23;\n'

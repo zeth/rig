@@ -318,6 +318,14 @@ chooses the status at run time. A `text/event-stream` operation may also list
 stream is finished and it should stop reconnecting. Outside host responses, only a `chosen_status`
 operation has `success_responses`.
 
+`RIG_RESPONSE_MEDIA_TYPE(media_type)` on a generated operation that returns a
+string emits `media_type`, a concrete `text/` media type such as `text/plain`.
+OpenAPI documents the success response under that media type with a string
+schema, which `RIG_STRING_VALUES(...)` on the operation can limit as
+`response_values`. Generated dispatch returns the string as the response's JSON
+`body` and sets the response's `media_type`, which is `application/json` for
+every other operation, so the host writes the string as text.
+
 A host-response operation that returns `rig::host_value` instead of a string
 emits `"host_value": true`. Generated dispatch then calls it like any generated
 operation: it decodes the parameters, passes context, and maps exceptions to

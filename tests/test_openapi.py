@@ -202,6 +202,19 @@ class ConversionTests(unittest.TestCase):
             self.assertIn(f"inline bool {function}(const std::string& method, "
                           "const std::string& path) {\n    (void)method;", routes)
 
+    def test_text_response_is_documented_and_dispatched(self):
+        string = {"kind": "builtin", "name": "string"}
+        self.ir["operations"].append({
+            "name": "ping", "cpp_name": "sample::ping", "method": "GET", "path": "/ping",
+            "parameters": [], "returns": string, "result": False,
+            "media_type": "text/plain", "response_values": ["pong"],
+        })
+        content = convert(self.ir)["paths"]["/ping"]["get"]["responses"]["200"]["content"]
+        self.assertEqual(content, {"text/plain": {"schema": {"type": "string", "enum": ["pong"]}}})
+        routes = generate_routes(self.ir, "codec.hpp")
+        self.assertIn('return response{200, json(sample::ping()), "ping", {}, {}, "text/plain"};',
+                      routes)
+
     def test_host_response_operation_is_documented_but_not_dispatched(self):
         result = {"kind": "named", "name": "sample::Result"}
         string = {"kind": "builtin", "name": "string"}

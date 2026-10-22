@@ -724,6 +724,14 @@ void emit_operation(std::ostream& output) {
         output << ",\"host_response\":";
         quoted(output, value.media_type);
     }
+    constexpr auto media_types = std::define_static_array(
+        std::meta::annotations_of_with_type(Function, ^^rig::response_media_type));
+    static_assert(media_types.size() <= 1, "RIG operations need at most one RIG_RESPONSE_MEDIA_TYPE");
+    if constexpr (media_types.size() == 1) {
+        constexpr auto value = [:std::meta::constant_of(media_types[0]):];
+        output << ",\"media_type\":";
+        quoted(output, value.media_type);
+    }
     static_assert(annotation_count<Function, rig::operation_id>() <= 1,
                   "RIG operations need at most one operation ID");
     if constexpr (annotation_count<Function, rig::operation_id>() == 1) {

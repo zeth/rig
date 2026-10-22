@@ -419,7 +419,7 @@ def validate(document):
             ("errors", "summary", "description", "response_description", "context_parameters",
              "public", "host_response", "success_status", "operation_id", "response_values",
              "response_format", "success_responses", "response_headers", "sse_events",
-             "chosen_status", "host_value"),
+             "chosen_status", "host_value", "media_type"),
         )
         if type(operation["result"]) is not bool:
             raise ValueError(f"{location}.result: expected boolean")
@@ -452,10 +452,24 @@ def validate(document):
                                  "without a result")
             if not operation.get("success_responses"):
                 raise ValueError(f"{location}.chosen_status: requires success_responses")
+        # A generated operation may answer with text, which dispatch hands the host as a string.
+        text_response = "media_type" in operation
+        if text_response:
+            media_type = operation["media_type"]
+            if not isinstance(media_type, str) or not media_type.startswith("text/") or (
+                not MEDIA_TYPE.fullmatch(media_type) or media_type.endswith("/*")
+            ):
+                raise ValueError(f"{location}.media_type: expected a text media type")
+            if host_served or chosen_status or operation["result"] or not returns_string:
+                raise ValueError(f"{location}.media_type: requires a generated operation "
+                                 "returning a string")
         for key in ("response_values", "response_format", "success_responses", "response_headers"):
-            if key in operation and not (host_served or (chosen_status and key == "success_responses")):
+            allowed = host_served or (chosen_status and key == "success_responses") or (
+                text_response and key == "response_values")
+            if key in operation and not allowed:
                 raise ValueError(f"{location}.{key}: requires host_response"
-                                 + (" or chosen_status" if key == "success_responses" else ""))
+                                 + (" or chosen_status" if key == "success_responses" else "")
+                                 + (" or media_type" if key == "response_values" else ""))
         if "response_values" in operation:
             values = _array(operation["response_values"], f"{location}.response_values")
             if not returns_string or not values or any(

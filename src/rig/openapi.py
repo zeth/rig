@@ -229,7 +229,7 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             result["operationId"] = operation["operation_id"]
         elif include_operation_ids:
             result["operationId"] = operation_names[operation["cpp_name"]]
-        media_type = operation.get("host_response", "application/json")
+        media_type = operation.get("host_response", operation.get("media_type", "application/json"))
         if media_type == EVENT_STREAM:
             success_media = {"itemSchema": event_schema(operation.get("sse_events", []), schema)}
         elif operation.get("response_format") == "binary":

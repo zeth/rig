@@ -271,6 +271,26 @@ class IRValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     validate(document)
 
+    def test_text_responses_are_generated_strings(self):
+        string = {"kind": "builtin", "name": "string"}
+        self.ir["operations"][0].update(returns=string, result=False, media_type="text/plain",
+                                        response_values=["pong"])
+        self.assertIs(validate(self.ir), self.ir)
+        cases = (
+            (lambda op: op.update(media_type="application/json"), "expected a text media type"),
+            (lambda op: op.update(media_type="text/*"), "expected a text media type"),
+            (lambda op: op.update(returns={"kind": "named", "name": "sample::Item"}),
+             "returning a string"),
+            (lambda op: op.update(host_response="text/plain"), "returning a string"),
+            (lambda op: op.pop("media_type"), "requires host_response"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(self.ir)
+                change(document["operations"][0])
+                with self.assertRaisesRegex(ValueError, message):
+                    validate(document)
+
     def test_host_response_details_require_a_host_response(self):
         string = {"kind": "builtin", "name": "string"}
         operation = self.ir["operations"][0]
