@@ -48,6 +48,7 @@ def generate(ir, codec_header):
         f'#include "{codec_header}"',
         "#include <charconv>",
         "#include <exception>",
+        "#include <functional>",
         "#include <initializer_list>",
         "#include <limits>",
         "#include <map>",
@@ -213,11 +214,14 @@ def generate(ir, codec_header):
         "        throw std::invalid_argument(error.what());",
         "    }",
         "}",
+        "// Looks up a request header by name, ignoring case; nothing when it is absent.",
+        "using header_lookup = std::function<std::optional<std::string>(std::string_view)>;",
         *(["template <typename Context>"] if has_context else []),
         "inline std::optional<response> dispatch(const std::string& method,",
         "                                    const std::string& path,",
         "                                    const std::string& body" +
-        (", Context& context) {" if has_context else ") {"),
+        (", Context& context," if has_context else ","),
+        "                                    const header_lookup& header = {}) {",
         "    const auto query_start = path.find('?');",
         "    const auto route_path = path.substr(0, query_start);",
     ]
@@ -229,6 +233,7 @@ def generate(ir, codec_header):
         ]
     lines.append("    std::smatch match;")
     lines.append("    (void)body;")
+    lines.append("    (void)header;")
 
     # Validated overlapping routes have a strict specificity order. Keep IR
     # order for routes with the same priority or disjoint match sets.
@@ -307,6 +312,19 @@ def generate(ir, codec_header):
                     f"            if (query_{position} == query_values.end())",
                     f'                throw std::invalid_argument("missing query parameter: {param_name}");',
                 ]
+            elif parameter.get("in") == "header":
+                decodes.append(
+                    f'            auto header_{position} = header ? '
+                    f'header({json.dumps(parameter["header"])}) : std::nullopt;'
+                )
+                if parameter["type"]["kind"] != "optional":
+                    decodes += [
+                        f"            if (!header_{position})",
+                        f'                throw std::invalid_argument("missing header: {parameter["header"]}");',
+                    ]
+                    value = f"std::move(*header_{position})"
+                else:
+                    value = f"std::move(header_{position})"
             elif parameter["type"]["kind"] == "optional":
                 # An optional body may be empty.
                 inner = cpp_type(parameter["type"]["value"])

@@ -308,7 +308,7 @@ class InspectorTests(unittest.TestCase):
             (root / "api.hpp").write_text(
                 '#include <rig/route.hpp>\n'
                 '#include <rig/result.hpp>\n'
-                '#include <exception>\n#include <string>\n#include <type_traits>\n'
+                '#include <exception>\n#include <optional>\n#include <string>\n#include <type_traits>\n'
                 'namespace sample {\n'
                 'struct Failure { bool ok RIG_BOOL_VALUE(false); std::string message; };\n'
                 'struct RIG_API("Sample", "1.0") RIG_BEARER_AUTH("bearerAuth", "token") '
@@ -324,6 +324,8 @@ class InspectorTests(unittest.TestCase):
                 '// Declared for the contract only; the host serves it and nothing defines it.\n'
                 'RIG_ROUTE(GET, "/items/{name}/raw") RIG_PUBLIC '
                 'RIG_HOST_RESPONSE("text/plain") std::string raw_item(std::string name);\n'
+                'RIG_ROUTE(GET, "/whoami") Item whoami(std::string host RIG_HEADER("Host"), '
+                'std::optional<std::string> agent RIG_HEADER("User-Agent"));\n'
                 'Failure rig_error_body(std::type_identity<Failure>, int status, '
                 'const std::exception& error);\n'
                 '}\n'
@@ -341,7 +343,7 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(ir["service"]["method_not_allowed"]["description"],
                              "Method not allowed")
             self.assertEqual([operation.get("public", False) for operation in ir["operations"]],
-                             [False, True, False, False, True])
+                             [False, True, False, False, True, False])
             self.assertEqual(ir["operations"][4]["host_response"], "text/plain")
             self.assertIs(ir["operations"][3]["chosen_status"], True)
             self.assertEqual(ir["operations"][3]["returns"],
@@ -363,6 +365,9 @@ class InspectorTests(unittest.TestCase):
                 '}\n'
                 'sample::Item sample::read_item(std::string name) { return {name, 1}; }\n'
                 'sample::Item sample::new_item() { return {"new", 0}; }\n'
+                'sample::Item sample::whoami(std::string host, std::optional<std::string> agent) {\n'
+                '  return {host + "/" + agent.value_or("-"), 0};\n'
+                '}\n'
                 '// An existing item is 200 and a new one 201; 7 picks an undeclared status.\n'
                 'rig::success<sample::Item> sample::add_item(Item item) {\n'
                 '  return {item.count == 7 ? 202 : item.count > 0 ? 200 : 201, item};\n'
@@ -389,6 +394,14 @@ class InspectorTests(unittest.TestCase):
                 '  if (rig_http::dispatch("GET", "/items/a/raw", "")) return 9;\n'
                 '  if (!rig_http::is_public("GET", "/items/a/raw")) return 10;\n'
                 '  if (!rig_http::is_host_served("GET", "/items/a/raw?x=1")) return 20;\n'
+                '  // Headers come from the host; a missing required header is a 400.\n'
+                '  auto who = rig_http::dispatch("GET", "/whoami", "", [](std::string_view name) {\n'
+                '    return name == "Host" ? std::optional<std::string>("h") : std::nullopt;\n'
+                '  });\n'
+                '  if (!who || who->status != 200 || who->body["name"] != "h/-") return 24;\n'
+                '  auto nobody = rig_http::dispatch("GET", "/whoami", "");\n'
+                '  if (!nobody || nobody->status != 400 ||\n'
+                '      nobody->body["message"] != "400: missing header: Host") return 25;\n'
                 '  if (rig_http::is_host_served("POST", "/items/a/raw")) return 21;\n'
                 '  if (rig_http::is_host_served("GET", "/items/a")) return 22;\n'
                 '  if (rig_http::is_host_served("GET", "/elsewhere")) return 23;\n'

@@ -315,7 +315,7 @@ class IRValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     validate(document)
 
-    def test_header_parameters_and_events_need_host_responses(self):
+    def test_header_parameters_and_events(self):
         string = {"kind": "builtin", "name": "string"}
         operation = self.ir["operations"][0]
         operation.update(returns=string, host_response="text/event-stream",
@@ -331,9 +331,6 @@ class IRValidationTests(unittest.TestCase):
             (lambda op: op["parameters"][1].update(type={"kind": "builtin", "name": "int"}),
              "a header parameter is a string"),
             (lambda op: op["sse_events"].append(dict(op["sse_events"][0])), "duplicate event"),
-            (lambda op: [op.pop("host_response"), op.pop("sse_events"),
-                         op.pop("success_responses")],
-             "header parameters require host_response"),
             (lambda op: op["success_responses"].append({"status": 205, "description": "Reset"}),
              "or 204 for an event stream"),
         )

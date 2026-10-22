@@ -227,6 +227,8 @@ partial update change something, and
 `RIG_OPERATION_ID("name")` fixes an operation's `operationId`. An event
 stream declares `RIG_SSE_EVENT("ready", Ready)` for each event and reads
 `Last-Event-ID` through a parameter marked `RIG_HEADER("Last-Event-ID")`.
+Any operation can read a request header that way; the host passes
+`rig_http::dispatch` a lookup function as its last argument.
 
 `RIG_HOST_RESPONSE("text/event-stream")` declares an operation whose response
 the host writes, such as an event stream or a file download. RIG documents it

@@ -318,11 +318,14 @@ chooses the status at run time. A `text/event-stream` operation may also list
 stream is finished and it should stop reconnecting. Outside host responses, only a `chosen_status`
 operation has `success_responses`.
 
-`RIG_HEADER(name)` on a string parameter of a host-response operation makes it
-a request header, emitted with `"in": "header"` and the header's `name`, which
-need not be a C++ identifier, such as `Last-Event-ID`. OpenAPI marks it
-required only when its type is not optional. Generated dispatch does not see
-request headers, so only host-response operations may declare them.
+`RIG_HEADER(name)` on a string parameter makes it a request header, emitted
+with `"in": "header"` and the header's `name`, which need not be a C++
+identifier, such as `Last-Event-ID`. OpenAPI marks it required only when its
+type is not optional. Generated dispatch takes an optional last argument, a
+`rig_http::header_lookup` that returns a header's value by name, ignoring case,
+or nothing when the request lacks it. Dispatch passes the value to the
+operation, and a missing required header is a validation error. Without a
+lookup, every header is missing.
 
 Each `RIG_SSE_EVENT(name, Body)` on a `text/event-stream` host response emits an
 entry in `sse_events`, and the body types are reachable like any other. OpenAPI

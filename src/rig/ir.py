@@ -596,13 +596,10 @@ def validate(document):
                 raise ValueError(f"{parameter_location}.default: requires a query parameter "
                                  "whose type is not optional")
             if parameter.get("in") == "header":
-                # Generated dispatch does not see request headers, so only the host reads them.
                 if not isinstance(parameter.get("header"), str) or not HEADER.fullmatch(parameter["header"]):
                     raise ValueError(f"{parameter_location}.header: expected an HTTP header name")
                 if query_value_type(parameter["type"]) != STRING:
                     raise ValueError(f"{parameter_location}: a header parameter is a string")
-                if not host_served:
-                    raise ValueError(f"{parameter_location}: header parameters require host_response")
             elif "header" in parameter:
                 raise ValueError(f"{parameter_location}.header: requires in header")
             elif "in" in parameter:
