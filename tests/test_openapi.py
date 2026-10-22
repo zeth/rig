@@ -283,6 +283,35 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(properties["heads"], {
             "type": "object", "additionalProperties": {"type": ["string", "null"]}})
 
+    def test_event_streams_describe_each_event_and_their_end(self):
+        string = {"kind": "builtin", "name": "string"}
+        operation = self.ir["operations"][0]
+        operation.update(returns=string, host_response="text/event-stream",
+                         success_responses=[{"status": 204, "description": "Finished"}])
+        document = convert(self.ir)
+        self.assertEqual(document["openapi"], "3.2.0")
+        responses = document["paths"]["/results/{id}"]["get"]["responses"]
+        event = {"type": "object", "properties": {
+            "event": {"type": "string"}, "data": {"type": "string"},
+            "id": {"type": "string"}, "retry": {"type": "integer", "minimum": 0}},
+            "required": ["data"]}
+        self.assertEqual(responses["200"]["content"], {"text/event-stream": {"itemSchema": event}})
+        self.assertEqual(responses["204"], {"description": "Finished"})
+        operation["sse_events"] = [
+            {"name": "ready", "type": {"kind": "named", "name": "sample::Result"}},
+            {"name": "gone", "type": string},
+        ]
+        item = convert(self.ir)["paths"]["/results/{id}"]["get"]["responses"]["200"]["content"][
+            "text/event-stream"]["itemSchema"]
+        self.assertEqual([alternative["properties"]["event"] for alternative in item["oneOf"]],
+                         [{"const": "ready"}, {"const": "gone"}])
+        self.assertEqual(item["oneOf"][0]["required"], ["event", "data"])
+        self.assertEqual(item["oneOf"][0]["properties"]["data"], {
+            "type": "string", "contentMediaType": "application/json",
+            "contentSchema": {"$ref": "#/components/schemas/Result"}})
+        self.assertEqual(item["oneOf"][1]["properties"]["data"]["contentSchema"],
+                         {"type": "string"})
+
     def test_host_responses_document_headers(self):
         operation = self.ir["operations"][0]
         operation.update(returns={"kind": "builtin", "name": "string"},
@@ -292,8 +321,8 @@ class ConversionTests(unittest.TestCase):
         response = convert(self.ir)["paths"]["/results/{id}"]["get"]["responses"]["200"]
         self.assertEqual(response["headers"], {"Content-Disposition": {
             "description": "Attachment filename.", "schema": {"type": "string"}}})
-        self.assertEqual(response["content"], {"application/octet-stream": {
-            "schema": {"type": "string", "format": "binary"}}})
+        # OpenAPI 3.2 describes raw bytes by their media type alone.
+        self.assertEqual(response["content"], {"application/octet-stream": {}})
         operation["response_headers"].append({"name": "content-disposition",
                                               "description": "Again."})
         with self.assertRaisesRegex(ValueError, "duplicate response header"):

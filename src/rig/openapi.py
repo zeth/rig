@@ -1,5 +1,6 @@
-"""Translate RIG's small C++ declaration IR into OpenAPI 3.1 JSON."""
+"""Translate RIG's small C++ declaration IR into OpenAPI 3.2 JSON."""
 
+import copy
 import json
 import re
 
@@ -229,20 +230,24 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         elif include_operation_ids:
             result["operationId"] = operation_names[operation["cpp_name"]]
         media_type = operation.get("host_response", "application/json")
-        success_schema = schema(operation["returns"])
-        if "response_values" in operation:
-            success_schema["enum"] = operation["response_values"]
-        if "response_format" in operation:
-            success_schema["format"] = operation["response_format"]
+        if media_type == EVENT_STREAM:
+            success_media = {"itemSchema": event_schema(operation.get("sse_events", []), schema)}
+        elif operation.get("response_format") == "binary":
+            # Raw bytes: a binary media type needs no schema.
+            success_media = {}
+        else:
+            success_schema = schema(operation["returns"])
+            if "response_values" in operation:
+                success_schema["enum"] = operation["response_values"]
+            if "response_format" in operation:
+                success_schema["format"] = operation["response_format"]
+            success_media = {"schema": success_schema}
         result["responses"] = {
             str(operation.get("success_status", 200)): {
                 "description": operation.get("response_description", "Success"),
-                "content": {media_type: {"schema": success_schema}}
+                "content": {media_type: success_media}
             }
         }
-        if "sse_events" in operation:
-            result["x-sse-events"] = {event["name"]: schema(event["type"])
-                                      for event in operation["sse_events"]}
         if "response_headers" in operation:
             headers = {header["name"]: {"description": header["description"],
                                         "schema": {"type": "string"}}
@@ -250,10 +255,13 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
             for response in result["responses"].values():
                 response["headers"] = headers
         for extra in operation.get("success_responses", []):
-            result["responses"][str(extra["status"])] = {
-                "description": extra["description"],
-                "content": {media_type: {"schema": dict(success_schema)}},
-            }
+            # A 204 has no content: for an event stream, it tells a reconnecting client the stream
+            # is finished.
+            result["responses"][str(extra["status"])] = (
+                {"description": extra["description"]} if extra["status"] == 204 else {
+                    "description": extra["description"],
+                    "content": {media_type: copy.deepcopy(success_media)},
+                })
         for key in ("summary", "description"):
             if key in operation:
                 result[key] = operation[key]
@@ -301,7 +309,7 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         methods[method] = result
 
     document = {
-        "openapi": "3.1.0",
+        "openapi": "3.2.0",
         "info": {"title": title, "version": version},
         "paths": paths,
         "components": {"schemas": components},
@@ -320,9 +328,36 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
     return ordered(document)
 
 
+EVENT_STREAM = "text/event-stream"
+
+
+def event_schema(events, schema):
+    """An event stream's itemSchema: the fields of one event, as OpenAPI 3.2 models them.
+
+    Each declared event is one alternative that fixes its name and gives its JSON data's schema.
+    Without declared events, any event matches."""
+    def event(name=None, data_schema=None):
+        data = {"type": "string"}
+        if data_schema is not None:
+            data.update(contentMediaType="application/json", contentSchema=data_schema)
+        return {
+            "type": "object",
+            "properties": {
+                "event": {"type": "string"} if name is None else {"const": name},
+                "data": data,
+                "id": {"type": "string"},
+                "retry": {"type": "integer", "minimum": 0},
+            },
+            "required": ["data"] if name is None else ["event", "data"],
+        }
+    if not events:
+        return event()
+    return {"oneOf": [event(item["name"], schema(item["type"])) for item in events]}
+
+
 METHOD_ORDER = ("get", "put", "post", "patch", "delete")
 OPERATION_ORDER = ("operationId", "summary", "description", "security", "parameters",
-                   "requestBody", "responses", "x-sse-events")
+                   "requestBody", "responses")
 
 
 def _in_order(mapping, order):

@@ -125,7 +125,7 @@ its pinned client tools in its own ignored virtual environment.
 
 The reflection writer extracts route annotations, parameters, return types,
 typed error responses, record fields, and enum values into versioned RIG IR
-JSON. `rig openapi` emits OpenAPI 3.1 JSON, or YAML with `--format yaml`; `rig json-codec` emits C++20
+JSON. `rig openapi` emits OpenAPI 3.2 JSON, or YAML with `--format yaml`; `rig json-codec` emits C++20
 `nlohmann::json` codecs; `rig http-routes` emits C++20 dispatch; and
 `rig embed-openapi` emits a header containing the exact OpenAPI bytes. Each
 generator reads IR (or OpenAPI bytes for `embed-openapi`) on standard input

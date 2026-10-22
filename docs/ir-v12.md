@@ -158,7 +158,7 @@ puts on the record's schema.
 partial updates that must change something.
 
 OpenAPI writes an optional value as its schema with `null` added to its
-`type`, as OpenAPI 3.1 does, and an optional reference as `anyOf` the
+`type`, as OpenAPI 3.1 and 3.2 do, and an optional reference as `anyOf` the
 reference and null.
 
 `RIG_NULLABLE` with `RIG_STRING_VALUES` gives a string that may also be null:
@@ -305,9 +305,12 @@ so a less specific generated route never takes its requests; `is_public`
 includes it. A host-response operation can describe its response further:
 `RIG_STRING_VALUES(...)` on the operation emits `response_values`, the strings
 a string response may be; `RIG_FORMAT(name)` emits `response_format`, such as
-`binary`; and each `RIG_SUCCESS_RESPONSE(status, description)` emits an entry
+`binary`, for which OpenAPI describes the response by its media type alone, with
+no schema; and each `RIG_SUCCESS_RESPONSE(status, description)` emits an entry
 in `success_responses`, another 2xx status with the same body, for a host that
-chooses the status at run time. Outside host responses, only a `chosen_status`
+chooses the status at run time. A `text/event-stream` operation may also list
+204, which has no body: answering a reconnect with 204 tells the client the
+stream is finished and it should stop reconnecting. Outside host responses, only a `chosen_status`
 operation has `success_responses`.
 
 `RIG_HEADER(name)` on a string parameter of a host-response operation makes it
@@ -317,8 +320,11 @@ required only when its type is not optional. Generated dispatch does not see
 request headers, so only host-response operations may declare them.
 
 Each `RIG_SSE_EVENT(name, Body)` on a `text/event-stream` host response emits an
-entry in `sse_events`; OpenAPI documents them as `x-sse-events`, a map from each
-event name to its data schema, and the body types are reachable like any other.
+entry in `sse_events`, and the body types are reachable like any other. OpenAPI
+documents the stream with the media type's `itemSchema`, which describes each
+event (`event`, `data`, `id` and `retry`): one `oneOf` alternative per declared
+event, fixing `event` to its name and describing `data` as JSON whose
+`contentSchema` is the body. A stream without declared events allows any event.
 
 `rig openapi` writes JSON, or YAML with `--format yaml`, in an order that does
 not depend on where declarations live: paths and schemas sorted by name,

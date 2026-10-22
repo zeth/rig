@@ -489,10 +489,13 @@ def validate(document):
             extra_location = f"{location}.success_responses[{index}]"
             extra = _object(extra, extra_location, ("status", "description"))
             status = extra["status"]
-            if type(status) is not int or not 200 <= status <= 299 or status in (204, 205) or (
-                status == operation.get("success_status", 200)
-            ):
-                raise ValueError(f"{extra_location}.status: expected another 2xx status with a body")
+            # An event stream may also answer 204, meaning it is finished, with no body.
+            no_body = status == 204 and operation.get("host_response") == "text/event-stream"
+            if type(status) is not int or not 200 <= status <= 299 or (
+                status in (204, 205) and not no_body
+            ) or status == operation.get("success_status", 200):
+                raise ValueError(f"{extra_location}.status: expected another 2xx status with a body, "
+                                 "or 204 for an event stream")
             _unique(extra_statuses, status, extra_location, "success status")
             if not isinstance(extra["description"], str) or not extra["description"]:
                 raise ValueError(f"{extra_location}.description: expected nonempty text")

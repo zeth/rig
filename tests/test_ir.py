@@ -313,7 +313,8 @@ class IRValidationTests(unittest.TestCase):
         string = {"kind": "builtin", "name": "string"}
         operation = self.ir["operations"][0]
         operation.update(returns=string, host_response="text/event-stream",
-                         sse_events=[{"name": "ready", "type": {"kind": "named", "name": "sample::Item"}}])
+                         sse_events=[{"name": "ready", "type": {"kind": "named", "name": "sample::Item"}}],
+                         success_responses=[{"status": 204, "description": "Finished"}])
         operation["parameters"].append({"name": "cursor", "in": "header", "header": "Last-Event-ID",
                                         "type": {"kind": "optional", "value": string}})
         self.assertIs(validate(self.ir), self.ir)
@@ -324,8 +325,11 @@ class IRValidationTests(unittest.TestCase):
             (lambda op: op["parameters"][1].update(type={"kind": "builtin", "name": "int"}),
              "a header parameter is a string"),
             (lambda op: op["sse_events"].append(dict(op["sse_events"][0])), "duplicate event"),
-            (lambda op: [op.pop("host_response"), op.pop("sse_events")],
+            (lambda op: [op.pop("host_response"), op.pop("sse_events"),
+                         op.pop("success_responses")],
              "header parameters require host_response"),
+            (lambda op: op["success_responses"].append({"status": 205, "description": "Reset"}),
+             "or 204 for an event stream"),
         )
         for change, message in cases:
             with self.subTest(message=message):

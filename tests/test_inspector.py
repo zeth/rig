@@ -733,7 +733,7 @@ class InspectorTests(unittest.TestCase):
             self.assertNotIn("operationId", paths["/ping"]["get"])
             self.assertEqual(
                 paths["/blob"]["get"]["responses"]["200"]["content"]["application/octet-stream"],
-                {"schema": {"type": "string", "format": "binary"}})
+                {})
             imported = paths["/import"]["post"]["responses"]
             self.assertEqual((imported["200"]["description"], imported["201"]["description"]),
                              ("Matched", "Created"))
@@ -900,9 +900,14 @@ class InspectorTests(unittest.TestCase):
             self.assertEqual(operation["parameters"][0], {
                 "name": "Last-Event-ID", "in": "header", "schema": {"type": "string"},
                 "description": "Resume after this event."})
-            self.assertEqual(operation["x-sse-events"], {
-                "ready": {"$ref": "#/components/schemas/Ready"},
-                "changed": {"$ref": "#/components/schemas/Changed"}})
+            self.assertNotIn("x-sse-events", operation)
+            events = operation["responses"]["200"]["content"]["text/event-stream"]["itemSchema"]
+            self.assertEqual(
+                [(alternative["properties"]["event"]["const"],
+                  alternative["properties"]["data"]["contentSchema"])
+                 for alternative in events["oneOf"]],
+                [("ready", {"$ref": "#/components/schemas/Ready"}),
+                 ("changed", {"$ref": "#/components/schemas/Changed"})])
             self.assertNotIn("requestBody", operation)
             routes = subprocess.run(
                 [sys.executable, "-m", "rig", "http-routes", "--codec-header", "codec.hpp"],
