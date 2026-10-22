@@ -360,4 +360,50 @@ def generate(ir, api_header):
         "template <typename T> T decode(const json& value) { return codec<T>::decode(value); }",
         "} // namespace rig_json",
     ]
+    lines += event_constructors(ir, cpp_type)
     return "\n".join(lines) + "\n"
+
+
+CPP_KEYWORDS = frozenset("""
+    alignas alignof and and_eq asm auto bitand bitor bool break case catch char class compl
+    concept const consteval constexpr constinit const_cast continue co_await co_return co_yield
+    decltype default delete do double dynamic_cast else enum explicit export extern false float
+    for friend goto if inline int long mutable namespace new noexcept not not_eq nullptr operator
+    or or_eq private protected public register reinterpret_cast requires return short signed
+    sizeof static static_assert static_cast struct switch template this thread_local throw true
+    try typedef typeid typename union unsigned using virtual void volatile wchar_t while xor xor_eq
+""".split())
+
+
+def event_function(name):
+    """The C++ name for an event's constructor: card.changed becomes card_changed."""
+    function = re.sub(r"[^A-Za-z0-9_]", "_", name)
+    if function[0].isdigit():
+        function = "_" + function
+    return function + "_" if function in CPP_KEYWORDS else function
+
+
+def event_constructors(ir, cpp_type):
+    """rig_events::<name>(data) for every declared event, overloaded by its data type."""
+    events = {}
+    for operation in ir["operations"]:
+        for event in operation.get("sse_events", []):
+            key = (event_function(event["name"]), cpp_type(event["type"]))
+            if events.setdefault(key, event["name"]) != event["name"]:
+                raise ValueError(f"events {events[key]!r} and {event['name']!r} need different "
+                                 f"constructors but both are {key[0]}({key[1]})")
+    if not events:
+        return []
+    lines = [
+        "",
+        "// An event can only be built with the data type its operation declares for it.",
+        "namespace rig_events {",
+    ]
+    for (function, data_type), name in sorted(events.items()):
+        lines += [
+            f"inline rig::event<nlohmann::json> {function}(const {data_type}& data) {{",
+            f"    return {{{json.dumps(name)}, rig_json::encode(data)}};",
+            "}",
+        ]
+    lines.append("} // namespace rig_events")
+    return lines

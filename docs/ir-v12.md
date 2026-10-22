@@ -334,6 +334,16 @@ event (`event`, `data`, `id` and `retry`): one `oneOf` alternative per declared
 event, fixing `event` to its name and describing `data` as JSON whose
 `contentSchema` is the body. A stream without declared events allows any event.
 
+`rig json-codec` also writes `rig_events::<name>(const Body&)` for each declared
+event, returning a `rig::event<nlohmann::json>` with the event's name and its
+encoded body. The function name is the event name with every character outside
+`[A-Za-z0-9_]` replaced by `_`, a leading `_` before a digit, and a trailing `_`
+after a C++ keyword, so `card.changed` becomes `card_changed`. An event name
+declared with several body types gets one overload per type, and two names that
+would need the same function for the same type are an error. A server that
+builds its events only with these functions can send no undeclared name, and no
+name with another event's data.
+
 `rig openapi` writes JSON, or YAML with `--format yaml`, in an order that does
 not depend on where declarations live: paths and schemas sorted by name,
 methods and operation keys in OpenAPI's usual order, responses by status. The

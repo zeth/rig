@@ -885,6 +885,64 @@ class InspectorTests(unittest.TestCase):
             run = subprocess.run([binary], cwd=directory, capture_output=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_event_constructors_pair_each_name_with_its_type(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "api.hpp").write_text(
+                '#include <rig/result.hpp>\n'
+                '#include <rig/route.hpp>\n'
+                '#include <string>\n'
+                'namespace sample {\n'
+                'struct Ready { std::string cursor; };\n'
+                'struct Progress { int percent; };\n'
+                'RIG_ROUTE(GET, "/events") RIG_HOST_RESPONSE("text/event-stream")\n'
+                'RIG_SSE_EVENT("ready", Ready) RIG_SSE_EVENT("progress", Ready)\n'
+                'std::string stream_events();\n'
+                'RIG_ROUTE(GET, "/jobs/events") RIG_HOST_RESPONSE("text/event-stream")\n'
+                'RIG_SSE_EVENT("progress", Progress) RIG_SSE_EVENT("job.done", Progress)\n'
+                'RIG_SSE_EVENT("delete", Ready)\n'
+                'std::string job_events();\n'
+                '}\n'
+            )
+            result = self.run_inspect(directory, "--header", "api.hpp", "--namespace", "sample")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            codec = subprocess.run(
+                [sys.executable, "-m", "rig", "json-codec", "--api-header", "api.hpp"],
+                input=result.stdout, cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(codec.returncode, 0, codec.stderr)
+            (root / "codec.hpp").write_text(codec.stdout)
+            (root / "check.cpp").write_text(
+                '#include "codec.hpp"\n'
+                'int main() {\n'
+                '  // progress is declared twice, with different types: one overload each.\n'
+                '  auto ready = rig_events::progress(sample::Ready{"c"});\n'
+                '  if (ready.name != "progress" || ready.data["cursor"] != "c") return 1;\n'
+                '  auto job = rig_events::progress(sample::Progress{50});\n'
+                '  if (job.name != "progress" || job.data["percent"] != 50) return 2;\n'
+                '  auto done = rig_events::job_done(sample::Progress{100});\n'
+                '  if (done.name != "job.done") return 3;\n'
+                '  // A C++ keyword gets a trailing underscore.\n'
+                '  if (rig_events::delete_(sample::Ready{"d"}).name != "delete") return 4;\n'
+                '}\n'
+            )
+            include_dir = Path(__file__).resolve().parents[1] / "src" / "rig" / "include"
+            binary = root / "check"
+            compiled = subprocess.run(
+                ["g++", "-std=c++20", "-Wall", "-Wextra", "-Werror", f"-I{include_dir}", "-I.",
+                 "check.cpp", "-o", str(binary)],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run([binary], cwd=directory, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            # job.done and job_done would need the same constructor.
+            ir = json.loads(result.stdout)
+            ir["operations"][1]["sse_events"].append(
+                {"name": "job_done", "type": ir["operations"][1]["sse_events"][1]["type"]})
+            with self.assertRaisesRegex(ValueError, "need different constructors"):
+                generate_codec(ir, "api.hpp")
+
     def test_streams_declare_headers_and_events(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "api.hpp").write_text(

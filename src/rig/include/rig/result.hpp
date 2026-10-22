@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -20,6 +21,15 @@ template <typename Body>
 struct success {
     int status;
     Body body;
+};
+
+// One server-sent event: a name an operation declares with RIG_SSE_EVENT and its data,
+// encoded as Json. Build it with the generated rig_events::<name>(data), which pairs each
+// declared name with its declared type, so an event can only carry the data it declares.
+template <typename Json>
+struct event {
+    std::string name;
+    Json data;
 };
 
 template <typename T>

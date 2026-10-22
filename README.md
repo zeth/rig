@@ -228,7 +228,9 @@ partial update change something, and
 stream declares `RIG_SSE_EVENT("ready", Ready)` for each event and reads
 `Last-Event-ID` through a parameter marked `RIG_HEADER("Last-Event-ID")`.
 Any operation can read a request header that way; the host passes
-`rig_http::dispatch` a lookup function as its last argument.
+`rig_http::dispatch` a lookup function as its last argument. The codec header
+then has `rig_events::ready(const Ready&)`, which returns a `rig::event` with
+the name and the encoded data, so a server builds only declared events.
 
 `RIG_HOST_RESPONSE("text/event-stream")` declares an operation whose response
 the host writes, such as an event stream or a file download. RIG documents it
