@@ -164,6 +164,10 @@ class ConversionTests(unittest.TestCase):
             document["paths"]["/results"]["get"]["responses"]["500"]["description"],
             "Listing failed",
         )
+        # An operation that maps every exception elsewhere never answers 500.
+        self.ir["operations"][-1]["errors"][0]["status"] = 400
+        self.assertNotIn("500", convert(self.ir)["paths"]["/results"]["get"]["responses"])
+        self.ir["operations"][-1]["errors"][0]["status"] = 500
         routes = generate_routes(self.ir, "codec.hpp")
         self.assertEqual(routes.count("catch (const std::exception& error)"), 2)
         self.assertIn('return response{500, encode_error<sample::Result>(500, error), '
