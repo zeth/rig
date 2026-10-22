@@ -294,7 +294,7 @@ def convert(ir, title="API", version="0.1.0", include_operation_ids=True):
         # exception an operation maps itself as std::exception.
         internal = service.get("internal_error") if service else None
         maps_every_exception = any("std::exception" in error.get("exceptions", [])
-                                   for error in operation["errors"])
+                                   for error in operation.get("errors", []))
         if internal and "host_response" not in operation and not maps_every_exception:
             add_generated_response(result, "500", schema(internal["type"]),
                                    internal["description"])
