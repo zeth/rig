@@ -1,4 +1,4 @@
 # A fork of openapi-python-client that reads OpenAPI 3.2 documents, which released versions
 # reject, until the change is accepted upstream.
-openapi-python-client @ git+https://github.com/zeth/openapi-python-client@6316dfef92ded79180520b4140ef1dad57020568
+openapi-python-client @ git+https://github.com/zeth/openapi-python-client@e0abac2ad9c0df67197ef7401504cb21aab7c1af
 openapi-spec-validator==0.9.0
