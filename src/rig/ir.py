@@ -452,14 +452,16 @@ def validate(document):
                                  "without a result")
             if not operation.get("success_responses"):
                 raise ValueError(f"{location}.chosen_status: requires success_responses")
-        # A generated operation may answer with text, which dispatch hands the host as a string.
+        # A generated operation may answer with a string in another media type, such as text or
+        # YAML, which dispatch hands the host to write as it is.
         text_response = "media_type" in operation
         if text_response:
             media_type = operation["media_type"]
-            if not isinstance(media_type, str) or not media_type.startswith("text/") or (
-                not MEDIA_TYPE.fullmatch(media_type) or media_type.endswith("/*")
+            if not isinstance(media_type, str) or not MEDIA_TYPE.fullmatch(media_type) or (
+                "*" in media_type or media_type == "application/json"
             ):
-                raise ValueError(f"{location}.media_type: expected a text media type")
+                raise ValueError(f"{location}.media_type: expected a concrete media type "
+                                 "other than application/json")
             if host_served or chosen_status or operation["result"] or not returns_string:
                 raise ValueError(f"{location}.media_type: requires a generated operation "
                                  "returning a string")

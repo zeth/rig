@@ -276,9 +276,12 @@ class IRValidationTests(unittest.TestCase):
         self.ir["operations"][0].update(returns=string, result=False, media_type="text/plain",
                                         response_values=["pong"])
         self.assertIs(validate(self.ir), self.ir)
+        yaml = copy.deepcopy(self.ir)
+        yaml["operations"][0]["media_type"] = "application/yaml"
+        self.assertIs(validate(yaml), yaml)
         cases = (
-            (lambda op: op.update(media_type="application/json"), "expected a text media type"),
-            (lambda op: op.update(media_type="text/*"), "expected a text media type"),
+            (lambda op: op.update(media_type="application/json"), "other than application/json"),
+            (lambda op: op.update(media_type="text/*"), "expected a concrete media type"),
             (lambda op: op.update(returns={"kind": "named", "name": "sample::Item"}),
              "returning a string"),
             (lambda op: op.update(host_response="text/plain"), "returning a string"),

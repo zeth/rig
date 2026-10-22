@@ -319,7 +319,8 @@ stream is finished and it should stop reconnecting. Outside host responses, only
 operation has `success_responses`.
 
 `RIG_RESPONSE_MEDIA_TYPE(media_type)` on a generated operation that returns a
-string emits `media_type`, a concrete `text/` media type such as `text/plain`.
+string emits `media_type`, a concrete media type other than `application/json`,
+such as `text/plain` or `application/yaml`.
 OpenAPI documents the success response under that media type with a string
 schema, which `RIG_STRING_VALUES(...)` on the operation can limit as
 `response_values`. Generated dispatch returns the string as the response's JSON
