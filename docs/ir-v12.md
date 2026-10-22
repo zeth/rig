@@ -296,13 +296,18 @@ annotation, dispatch returns no response for an unmatched method, as before.
 `allow` is empty on every other response.
 
 `RIG_HOST_RESPONSE(media_type)` marks an operation whose response the hosting
-server writes, with that media type. The declaration describes the contract
-and need not be defined. The inspector emits `host_response`; a media type
+server writes, with that media type, or a media range such as `*/*` or `text/*`
+when it serves several. The declaration describes the contract and need not be
+defined. The inspector emits `host_response`; a media type
 other than `application/json` requires a `std::string` return. Such an
 operation has no context parameters and maps no exceptions. Generated dispatch
 still ranks its route with the others and returns no match when it is selected,
 so a less specific generated route never takes its requests; `is_public`
-includes it. A host-response operation can describe its response further:
+includes it. `rig_http::is_host_served(method, path)` applies the same route
+precedence and returns whether the operation dispatch would select is a
+host-response operation. A host that runs its own handlers only when it returns
+true serves exactly the routes the contract declares: when dispatch returns no
+response and `is_host_served` is false, the request names no operation. A host-response operation can describe its response further:
 `RIG_STRING_VALUES(...)` on the operation emits `response_values`, the strings
 a string response may be; `RIG_FORMAT(name)` emits `response_format`, such as
 `binary`, for which OpenAPI describes the response by its media type alone, with

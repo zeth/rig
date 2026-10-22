@@ -5,8 +5,9 @@ Notes for later. Nothing here needs doing yet.
 ## Routing
 
 Generated dispatch tries one `std::regex` per route, in precedence order, and
-`is_public` walks the same order. Host-response operations take part too, so
-a request the host serves still passes through the chain first.
+`is_public` walks the same order, as does `is_host_served` for a request
+dispatch leaves to the host. Host-response operations take part too, so a
+request the host serves still passes through the chain first.
 
 Measured on 21 October 2026 with Holder's generated routes (77 routes, GCC
 16.2.1, `-O2`, libstdc++'s `std::regex`):
@@ -17,7 +18,8 @@ Measured on 21 October 2026 with Holder's generated routes (77 routes, GCC
 | A path that matches no route | about 5 µs | |
 | The first route | about 0.1 µs | |
 
-With `is_public` as well, that is roughly 10 µs per request at worst. A
+With `is_public` as well, that is roughly 10 µs per request at worst, and
+`is_host_served` adds another walk for the few requests the host serves. A
 request to a local daemon also parses HTTP, does socket I/O and usually
 queries SQLite, which takes hundreds of microseconds to milliseconds, so this
 is about 1% of a request and not worth changing yet.
@@ -29,8 +31,9 @@ matcher that splits the path once and branches on the method, the segment
 count and the literal segments, like a trie, using the same precedence rules
 as `ir.route_priority`. That should bring routing to tens or hundreds of
 nanoseconds, below a hand-written chain of `if` statements over a hundred
-routes. Applications would only regenerate their headers. `is_public` could
-share the matcher, so a request is matched once for both questions.
+routes. Applications would only regenerate their headers. `is_public` and
+`is_host_served` could share the matcher, so a request is matched once for
+every question.
 
 To measure again, time `std::regex_match` over the patterns in a generated
 routes header, for a path that matches late and one that matches nothing.

@@ -11,7 +11,8 @@ IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
 PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z_0-9]*)\}\Z")
 LITERAL = re.compile(r"[A-Za-z0-9._~-]+\Z")
 HEADER = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*\Z")
-MEDIA_TYPE = re.compile(r"[a-z]+/[A-Za-z0-9][A-Za-z0-9.+-]*\Z")
+# A media type, or a range such as */* or text/* for a host that serves several.
+MEDIA_TYPE = re.compile(r"(?:\*/\*|[a-z]+/(?:\*|[A-Za-z0-9][A-Za-z0-9.+-]*))\Z")
 
 
 def identifier(value):

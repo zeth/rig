@@ -451,10 +451,33 @@ def generate(ir, codec_header):
                         if operation.get("public")]
     if public_positions:
         lines.append("    const auto route_path = path.substr(0, path.find('?'));")
-        for index, operation in [pair for pair in ordered][:public_positions[-1] + 1]:
+        for index, operation in ordered[:public_positions[-1] + 1]:
             parameters = {identifier(item["name"]): item for item in operation["parameters"]}
             pattern, _ = route_pattern(operation["path"], parameters)
             verdict = "true" if operation.get("public") else "false"
+            lines += [
+                f"    static const std::regex route_{index}({json.dumps(pattern)});",
+                f'    if (method == "{operation["method"]}" && '
+                f"std::regex_match(route_path, route_{index})) return {verdict};",
+            ]
+    else:
+        lines += ["    (void)method;", "    (void)path;"]
+    lines += [
+        "    return false;",
+        "}",
+        "// Whether the operation dispatch would select for this request is a RIG_HOST_RESPONSE",
+        "// operation, so the hosting server serves only the routes the contract declares.",
+        "inline bool is_host_served(const std::string& method, const std::string& path) {",
+    ]
+    # Routes after the last host-served one in dispatch order can only answer false.
+    host_positions = [position for position, (_, operation) in enumerate(ordered)
+                      if "host_response" in operation]
+    if host_positions:
+        lines.append("    const auto route_path = path.substr(0, path.find('?'));")
+        for index, operation in ordered[:host_positions[-1] + 1]:
+            parameters = {identifier(item["name"]): item for item in operation["parameters"]}
+            pattern, _ = route_pattern(operation["path"], parameters)
+            verdict = "true" if "host_response" in operation else "false"
             lines += [
                 f"    static const std::regex route_{index}({json.dumps(pattern)});",
                 f'    if (method == "{operation["method"]}" && '

@@ -176,8 +176,14 @@ class IRValidationTests(unittest.TestCase):
         operation = self.ir["operations"][0]
         operation.update(returns=string, host_response="text/event-stream")
         self.assertIs(validate(self.ir), self.ir)
+        for media_range in ("*/*", "text/*"):
+            with self.subTest(media_range=media_range):
+                document = copy.deepcopy(self.ir)
+                document["operations"][0]["host_response"] = media_range
+                self.assertIs(validate(document), document)
         cases = (
             (lambda op: op.update(host_response="yaml"), "expected a media type"),
+            (lambda op: op.update(host_response="*/json"), "expected a media type"),
             (lambda op: op.update(returns={"kind": "named", "name": "sample::Item"}),
              "requires a string return"),
             (lambda op: op.update(context_parameters=[{"name": "db", "position": 0}]),

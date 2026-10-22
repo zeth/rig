@@ -196,6 +196,10 @@ exceptions, and OpenAPI documents that body instead.
 documents the host's 401 on every operation, and `RIG_PUBLIC` marks an
 operation that needs no token: it gets `security: []` and no 401. The host
 asks `rig_http::is_public(method, path)` before authenticating.
+When dispatch returns no response, `rig_http::is_host_served(method, path)`
+says whether the request names a `RIG_HOST_RESPONSE` operation for the host to
+serve; otherwise it names no operation, so the host can answer 404 and never
+serve a route the contract leaves out.
 `RIG_INTERNAL_ERROR(ErrorResponse, "Internal server error")` makes every
 operation turn an otherwise unmapped `std::exception` into a documented 500.
 `RIG_METHOD_NOT_ALLOWED(ErrorResponse, "Method not allowed")` makes dispatch

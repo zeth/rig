@@ -192,10 +192,11 @@ class ConversionTests(unittest.TestCase):
         for method in ("get", "put"):
             self.assertNotIn("405", document["paths"]["/results/{id}"][method]["responses"])
 
-    def test_is_public_answers_false_without_public_operations(self):
+    def test_is_public_and_is_host_served_answer_false_without_their_operations(self):
         routes = generate_routes(self.ir, "codec.hpp")
-        self.assertIn("inline bool is_public(const std::string& method, "
-                      "const std::string& path) {\n    (void)method;", routes)
+        for function in ("is_public", "is_host_served"):
+            self.assertIn(f"inline bool {function}(const std::string& method, "
+                          "const std::string& path) {\n    (void)method;", routes)
 
     def test_host_response_operation_is_documented_but_not_dispatched(self):
         result = {"kind": "named", "name": "sample::Result"}
